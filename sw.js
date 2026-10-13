@@ -1,9 +1,10 @@
 // Service Worker: hält die App offline verfügbar.
 // Bei jeder neuen Version VERSION erhöhen, dann lädt das Handy die neuen Dateien.
-const VERSION = "v3";
+const VERSION = "v4";
 const CACHE = "kasse-" + VERSION;
 const DATEIEN = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png", "./apple-touch-icon.png",
   "./kern.js", "./liste.js", "./preise.js", "./erfassen.js", "./budget.js", "./abgleich.js", "./produkte.js", "./excel.js", "./bon.js", "./ocr/tesseract.min.js",
+  "./bild.js", "./scanner.js", "./scan-worker.js", "./pdf.js", "./ablage.js", "./entwurf.js",
   "./fonts/bricolage-grotesque.woff2", "./fonts/ibm-plex-mono-500.woff2", "./Haushaltsbudget-Vorlage.xlsx"];
 // Texterkennung (rund 5 MB, ändert sich selten): eigener Speicher, der bei App-Updates erhalten bleibt.
 // Bei neuen OCR-Dateien OCR_CACHE umbenennen.

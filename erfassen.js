@@ -1,9 +1,11 @@
 /* Kasse unterwegs – Erfassen: Quittung auslesen, Artikel einem Produkt zuordnen, prüfen, speichern; Gekocht */
 "use strict";
 
-/* ---------- Quittung fotografieren und auf dem Handy auslesen ---------- */
-// Jedes Foto wird einzeln gelesen (Text bleibt am Foto), danach werden alle Teile zusammen ausgewertet.
+/* ---------- Quittung scannen und auf dem Handy auslesen ---------- */
+// Jede Seite: Originalfoto (roh) + Ecken → zugeschnittenes, entzerrtes Bild (orig, für Texterkennung und Ablage)
+// + verkleinerte Kopie (blob, für «Claude liest später»). Text und Wortpositionen bleiben an der Seite.
 const Q = { fotos: [], wer: "Simon", teil: "geteilt", laeuft: false, stopp: false };
+const MAX_SEITEN = 8;
 async function verkleinern(file) {
   try {
     const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
@@ -15,21 +17,41 @@ async function verkleinern(file) {
 }
 function zeichneQFotos() {
   const box = $("#q-fotos"); box.replaceChildren(); box.hidden = !Q.fotos.length;
-  Q.fotos.forEach((f, i) => box.appendChild(h("div", { class: "foto" }, h("img", { src: f.url, alt: "Teil " + (i + 1) }), h("span", { class: "nr" }, String(i + 1)),
-    h("button", { type: "button", class: "weg", "aria-label": "Foto " + (i + 1) + " entfernen", onclick: () => qWeg(f) }, "×"))));
-  $("#q-kamera-txt").textContent = Q.fotos.length ? "Nächster Teil" : "Foto aufnehmen";
+  Q.fotos.forEach((f, i) => box.appendChild(h("div", { class: "foto" },
+    h("button", { type: "button", class: "foto-knopf", "aria-label": `Teil ${i + 1} zuschneiden`, onclick: () => qBearbeiten(f) }, h("img", { src: f.url, alt: "Teil " + (i + 1) }), h("span", { class: "nr" }, String(i + 1)), h("span", { class: "stift" }, icon("stift"))),
+    h("button", { type: "button", class: "weg", "aria-label": "Teil " + (i + 1) + " entfernen", onclick: () => qWeg(f) }, "×"))));
+  $("#q-scan-txt").textContent = Q.fotos.length ? "Weiteren Teil scannen" : "Scannen";
   $("#q-speichern").disabled = !Q.fotos.length;
+  $("#q-zone").classList.toggle("kompakt", !!Q.fotos.length);
 }
-async function qHinzu(files) {
+async function seiteHinzu(s) {
+  const klein = await verkleinern(s.blob);
+  Q.fotos.push({ id: uid(), roh: s.roh, ecken: s.ecken, modus: s.modus, drehung: s.drehung || 0, orig: s.blob, blob: klein, url: URL.createObjectURL(klein), breite: s.breite, hoehe: s.hoehe, scan: true, text: null, fehler: false });
+}
+function qScannen() {
+  if (Q.fotos.length >= MAX_SEITEN) { toast(`Höchstens ${MAX_SEITEN} Teile pro Quittung.`); return; }
+  Scanner.oeffnen({ fertig: async seiten => { for (const s of seiten.slice(0, MAX_SEITEN - Q.fotos.length)) { await seiteHinzu(s); URL.revokeObjectURL(s.url); } zeichneQFotos(); entwurfBald(); qLesen(); } });
+}
+// Galerie oder Kamera-App: jedes Bild zuerst zuschneiden
+async function qDateien(files) {
   for (const f of Array.from(files || [])) {
-    if (Q.fotos.length >= 5) { toast("Höchstens 5 Fotos pro Quittung."); break; }
-    const b = await verkleinern(f);
-    Q.fotos.push({ orig: f, blob: b, url: URL.createObjectURL(b), text: null, fehler: false });
+    if (Q.fotos.length >= MAX_SEITEN) { toast(`Höchstens ${MAX_SEITEN} Teile pro Quittung.`); break; }
+    const s = await Scanner.zuschneiden(f);
+    if (s) await seiteHinzu(s);
   }
-  zeichneQFotos(); qLesen();
+  zeichneQFotos(); entwurfBald(); qLesen();
+}
+async function qBearbeiten(f) {
+  if (Q.laeuft) qStopp();
+  const s = await Scanner.zuschneiden(f.roh, { ecken: f.ecken, modus: f.modus, drehung: f.drehung });
+  if (!s) { if (Q.fotos.some(x => x.text == null && !x.fehler)) qLesen(); return; }
+  URL.revokeObjectURL(f.url);
+  const klein = await verkleinern(s.blob);
+  Object.assign(f, { ecken: s.ecken, modus: s.modus, drehung: s.drehung || 0, orig: s.blob, blob: klein, url: URL.createObjectURL(klein), breite: s.breite, hoehe: s.hoehe, text: null, woerter: null, fehler: false, gesichert: false });
+  zeichneQFotos(); entwurfBald(); qLesen();
 }
 function qWeg(f) {
-  URL.revokeObjectURL(f.url); Q.fotos = Q.fotos.filter(x => x !== f); zeichneQFotos();
+  URL.revokeObjectURL(f.url); Q.fotos = Q.fotos.filter(x => x !== f); zeichneQFotos(); entwurfBald();
   if (!Q.fotos.length) { if (Q.laeuft) qStopp(); qStatus(null); return; }
   if (!Q.laeuft) qAuswerten();
 }
@@ -39,8 +61,9 @@ function qLeeren() {
   Q.fotos = []; $("#q-notiz").value = ""; zeichneQFotos(); qStatus(null);
 }
 function qStopp() { Q.stopp = true; if (window.Bon) Bon.abbrechen(); }
-$("#q-kamera").addEventListener("change", ev => { qHinzu(ev.target.files); ev.target.value = ""; });
-$("#q-galerie").addEventListener("change", ev => { qHinzu(ev.target.files); ev.target.value = ""; });
+$("#q-scan").addEventListener("click", qScannen);
+$("#q-kamera").addEventListener("change", ev => { qDateien(ev.target.files); ev.target.value = ""; });
+$("#q-galerie").addEventListener("change", ev => { qDateien(ev.target.files); ev.target.value = ""; });
 
 function qStatus(art, text, nochmals) {
   const box = $("#q-status"); box.replaceChildren(); delete box.dataset.lauf;
@@ -83,10 +106,11 @@ async function qLesen() {
       const foto = f, nr = () => Math.max(1, Q.fotos.indexOf(foto) + 1);
       qFortschritt("laden", 0, nr(), Q.fotos.length, foto.url);
       const melden = (ph, p) => { if (!Q.stopp) qFortschritt(ph, p, nr(), Q.fotos.length, foto.url); };
-      try { foto.text = await Bon.bildText(foto.orig, melden); }
+      const merken = () => { const l = Bon.letzte(); foto.woerter = l ? l.woerter : []; foto.wB = l && l.breite; foto.wH = l && l.hoehe; entwurfBald(); };
+      try { foto.text = await Bon.bildText(foto.orig, melden, { zuschneiden: !foto.scan }); merken(); }
       catch (e) {
         if (e && e.abgebrochen) { abgebrochen = true; break; }
-        try { foto.text = await Bon.bildText(foto.blob, melden); }
+        try { foto.text = await Bon.bildText(foto.blob, melden, { zuschneiden: !foto.scan }); merken(); }
         catch (e2) { if (e2 && e2.abgebrochen) { abgebrochen = true; break; } foto.fehler = true; }
       }
     }
@@ -271,6 +295,8 @@ function fAktualisieren() {
   for (const el of $$("[data-kat-summe]")) { const k = el.dataset.katSumme; el.textContent = fmt(F.artikel.filter(a => a.kat === k).reduce((x, a) => x + (Number(a.p) > 0 ? Number(a.p) : 0), 0)); }
   for (const r of $$("#f-artikel .art")) if (r._neu) r._neu();
   zeichneBonAnsicht();
+  $("#f-ablage-wrap").hidden = !(F.ausBon && Q.fotos.length && F.typ === "einkauf");
+  entwurfBald();
   if (!arts.length || F.ausBon) return;
   const p = vergleichPanel(arts, F.laden, $("#f-datum").value || heute(), null);
   if (p) box.appendChild(p);
@@ -339,14 +365,19 @@ function formAusBon(r) {
   $("#f-betrag").dispatchEvent(new Event("input"));
   const finder = namenFinder();
   F.artikel = r.artikel.map(a => zuArtikel(a, finder));
+  F.bon.ladenFehlt = !r.laden;
+  zeichneBonHinweis();
+  zeichneArtikel();
+}
+function zeichneBonHinweis(wieder) {
   $("#f-titel").textContent = "Quittung prüfen"; $("#f-sub").textContent = "Gelesen von deinem Foto – kontrollieren und speichern";
-  const pruefen = F.artikel.filter(a => a.pruefen).length, offen = F.artikel.filter(a => !a.zugeordnet).length;
+  const pruefen = F.artikel.filter(a => a.pruefen).length, offen = F.artikel.filter(a => !a.zugeordnet).length, b = F.bon || {};
   const box = $("#f-bon"); box.hidden = false;
   box.replaceChildren(h("div", { class: "notice warn" }, icon("info"), h("div", null,
+    wieder ? h("b", null, "Wiederhergestellt – noch nicht gespeichert. ") : null,
     pruefen ? `${pruefen} ${pruefen === 1 ? "Zeile ist" : "Zeilen sind"} gelb – dort war die Erkennung unsicher. Mit dem Bon vergleichen und mit ✓ bestätigen. ` : "Bitte kurz mit dem Bon vergleichen. ",
     offen ? `${offen} Artikel ${offen === 1 ? "hat" : "haben"} noch kein Produkt – antippen und wählen, dann werden die Preise vergleichbar. ` : "",
-    r.laden ? "" : "Laden nicht erkannt – bitte wählen. ", r.datum ? "" : "Datum nicht erkannt – heute eingesetzt.")));
-  zeichneArtikel();
+    b.ladenFehlt ? "Laden nicht erkannt – bitte wählen. " : "", b.datumFehlt ? "Datum nicht erkannt – heute eingesetzt." : "")));
 }
 $("#f-form").addEventListener("submit", async ev => {
   ev.preventDefault();
@@ -358,12 +389,15 @@ $("#f-form").addEventListener("submit", async ev => {
     const ohne = F.artikel.find(a => (a.n || a.b) && !(Number(a.p) > 0));
     if (ohne) { toast("Bei einem Artikel fehlt der Preis – bitte ergänzen oder die Zeile entfernen."); const r = $(`#f-artikel .art[data-id="${ohne.id}"]`); if (r) { r.scrollIntoView({ block: "center" }); r.querySelector(".preis input").focus(); } return; }
   }
-  const ausBon = F.ausBon;
+  const ausBon = F.ausBon, pwaId = uid(), datum = $("#f-datum").value || heute();
   // Zuordnungen lernen: dieser Bon-Text heisst ab jetzt so (und hat diese Packung)
   if (F.typ === "einkauf") for (const a of F.artikel) if (a.b && a.n && a.zugeordnet) { const g = !a.gewogen ? Produkte.groesse(a.packung) : null; L.zuordnung[bonKey(a.b)] = g ? { n: a.n, g } : { n: a.n }; }
-  L.eintraege.push({ pwaId: uid(), typ: F.typ, datum: $("#f-datum").value || heute(), ort, betrag: rund(betrag), bezahlt: F.wer, teilung: F.teil, notiz: $("#f-notiz").value.trim(), artikel: F.typ === "einkauf" ? artLesen() : [] });
+  L.eintraege.push({ pwaId, typ: F.typ, datum, ort, betrag: rund(betrag), bezahlt: F.wer, teilung: F.teil, notiz: $("#f-notiz").value.trim(), artikel: F.typ === "einkauf" ? artLesen() : [] });
   if (await sichern("eintraege", "zuordnung")) {
-    toast("Gespeichert – wird beim nächsten Abgleich gesendet");
+    if (ausBon && Q.fotos.length && $("#f-ablage").checked) {
+      try { await Ablage.speichern({ seiten: Q.fotos.map(f => ({ blob: f.orig, breite: f.breite, hoehe: f.hoehe, woerter: f.woerter, wBreite: f.wB, wHoehe: f.wH, text: f.text })), laden: ort, datum, total: rund(betrag), eintragId: pwaId }); toast("Gespeichert und in der Ablage"); }
+      catch (e) { toast("Gespeichert – die Ablage ist voll, das Bild wurde nicht aufbewahrt"); }
+    } else toast("Gespeichert – wird beim nächsten Abgleich gesendet");
     if (ausBon) qLeeren();
     fLeeren(); zeichneEListe(); zeichnePreise(); if (typeof zeichneBudget === "function") zeichneBudget();
   }
@@ -421,4 +455,4 @@ function zeichneGListe() {
     h("div", { style: "min-width:0" }, h("div", { style: "font-weight:650" }, g.titel), h("div", { class: "sub" }, `${datumKurz(g.datum)} · ${g.wer}${g.bewertung ? " · " + "★".repeat(g.bewertung) : ""}`)),
     loeschKnopf(async () => { L.gekocht = L.gekocht.filter(x => x.pwaId !== g.pwaId); await sichern("gekocht"); zeichneGListe(); })));
 }
-ZEICHNER.erfassen = () => { zeichneEListe(); zeichneQListe(); };
+ZEICHNER.erfassen = () => { zeichneEListe(); zeichneQListe(); Ablage.zeichnen(); };

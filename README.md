@@ -1,14 +1,16 @@
 # Kasse unterwegs
 
-Offline-Begleit-App zur **Haushaltskasse** von Simon und Eliana: Einkaufsliste mit Laden-Tipp, Vorrat, **Quittungen per Foto auslesen**, Preise über alle Läden vergleichen und ein **Monatsbudget** mit Excel-Export – alles auch ohne Netz.
+Offline-Begleit-App zur **Haushaltskasse** von Simon und Eliana: Einkaufsliste mit Laden-Tipp, Vorrat, **Quittungen scannen** (Kantenerkennung, automatische Aufnahme, Zuschneiden) und auslesen, **Ablage mit durchsuchbaren PDFs**, Preise über alle Läden vergleichen und ein **Monatsbudget** mit Excel-Export – alles auch ohne Netz.
 
 **In diesem Repository liegt nur Programmcode.** Alle Daten (Einkäufe, Preise, Fotos, Budget) bleiben auf dem Handy und gehen nur per Datei an die Haushaltskasse.
 
 ## Installieren (Android)
 
 1. In Chrome öffnen: <https://simonbruder-hub.github.io/haushaltskasse-app/>
-2. Chrome-Menü (⋮) → **App installieren** (oder «Zum Startbildschirm hinzufügen»).
+2. Oben in der App auf **Installieren** tippen – oder Chrome-Menü (⋮) → **App installieren**.
+   Steht dort nur «Zum Startbildschirm hinzufügen», ist schon eine alte Verknüpfung vorhanden: diese vom Startbildschirm entfernen, Seite neu laden, dann erscheint «Installieren».
 3. Einmal mit Netz öffnen – danach läuft die App auch offline. Nach einem Update die App einmal ganz schliessen und neu öffnen.
+4. Lange auf das App-Symbol tippen: Verknüpfungen «Scannen», «Liste», «Budget».
 
 ## Die Register
 
@@ -20,13 +22,29 @@ Offline-Begleit-App zur **Haushaltskasse** von Simon und Eliana: Einkaufsliste m
 | **Budget** | Einnahmen, feste und variable Kosten, Rückstellungen, Sparen – pro Monat, pro Person, Jahresplan, Ist-Vergleich, Faustregeln, Excel-Export |
 | **Abgleich** | Stand aus der Haushaltskasse laden, Erfasstes senden, aufräumen, Einstellungen |
 
-## Quittung auslesen
+## Quittung scannen und auslesen
 
-Foto aufnehmen (oder aus der Galerie). Die App liest Laden, Datum, Total, Artikel und Preise direkt auf dem Handy (Texterkennung mit Tesseract, ohne Internet) und zeigt eine digitale Quittung mit «Wofür ausgegeben» und Preisvergleich.
+**Scannen** öffnet die Kamera direkt in der App (die App bleibt offen, nichts geht verloren):
+
+- **Kantenerkennung** – die App sucht die Quittung im Bild (geglättete Helligkeit und «Papierfarbe», Sobel-Gradient, Hough-Linien getrennt nach Richtung des Helligkeitssprungs, Prüfung auf hellere Papierseite). Funktioniert auch auf hellem Stein oder Holz.
+- **Automatische Aufnahme** – sobald die Quittung erkannt ist und das Handy ruhig ist, löst die App aus (Ring um den Auslöser). «Manuell» schaltet das ab. Lange Quittungen Teil für Teil.
+- **Entzerren** – die vier Ecken werden auf ein Rechteck abgebildet (Perspektivkorrektur), als hätte man genau von oben fotografiert.
+- **Verbessern** – «Kontrast» rechnet Schatten und ungleichmässiges Licht heraus, «S/W» macht reines Schwarz-Weiss, «Farbe» lässt das Bild wie es ist.
+- **Zuschneiden** – jedes Foto (auch aus der Galerie) lässt sich mit Ecken und Kanten anpassen, mit Lupe. Den Kopf mit Adresse wegzuschneiden hilft der Texterkennung.
+
+Danach liest die App Laden, Datum, Total, Artikel und Preise (Texterkennung mit Tesseract, ohne Internet) und zeigt eine digitale Quittung mit «Wofür ausgegeben» und Preisvergleich. Gescannte Quittungen liest sie deutlich besser und schneller als normale Fotos.
 
 - Gelb markierte Zeilen waren unsicher – mit dem Bon vergleichen und mit ✓ bestätigen.
 - Weicht die Summe der Artikel vom Total ab, steht das in der Quittung.
 - Beim ersten Auslesen lädt die App die Texterkennung einmalig (rund 5 MB). Ein Foto braucht etwa eine halbe bis eine Minute.
+
+## Ablage
+
+Beim Speichern einer gescannten Quittung kommt sie (wenn angehakt) in die **Ablage** auf dem Handy: Bild in hoher JPEG-Qualität und erkannter Text. Die Ablage ist durchsuchbar (Laden, Artikel, Betrag); jede Quittung lässt sich als **PDF mit unsichtbarer Textebene** teilen oder speichern – im PDF-Leser kann man darin suchen und Text kopieren.
+
+## Nichts geht verloren
+
+Android beendet Apps im Hintergrund. Deshalb sichert die App alle ungespeicherten Eingaben, Fotos und gelesenen Quittungen laufend und stellt sie beim nächsten Start wieder her («Wiederhergestellt – noch nicht gespeichert»).
 
 ## Gleiche Produkte, verschiedene Namen
 
@@ -59,9 +77,13 @@ Gliederung wie in Schweizer Budgetvorlagen: Einnahmen · Wohnen & Energie · Ver
 | `kern.js` | Hilfen, Symbole, Speicher (IndexedDB), Register, Stand, Preisvergleich |
 | `liste.js`, `preise.js`, `erfassen.js`, `budget.js`, `abgleich.js` | die Register |
 | `produkte.js` | Produktkatalog: Bon-Text → Grundprodukt, Warengruppe, Bio, Packungsgrösse |
-| `bon.js` | Quittungen auslesen: Bild aufbereiten, Texterkennung in zwei Durchgängen, Artikel/Preise/Total |
+| `bon.js` | Quittungen auslesen: Bild aufbereiten, Texterkennung in zwei Durchgängen, Artikel/Preise/Total, Kopf/Adresse ausfiltern |
+| `bild.js`, `scan-worker.js` | Bildverarbeitung: Kantenerkennung, Perspektive entzerren, Kontrast/Schwarz-Weiss, drehen (Erkennung im Hintergrund-Worker) |
+| `scanner.js` | Kamera in der App mit automatischer Aufnahme, Zuschneide-Editor mit Lupe |
+| `ablage.js`, `pdf.js` | Ablage der Quittungen, durchsuchbares PDF ohne Bibliothek |
+| `entwurf.js` | Ungespeicherte Eingaben laufend sichern und wiederherstellen |
 | `excel.js` | Excel-Datei erzeugen (ohne Bibliothek, offline) |
 | `ocr/` | [Tesseract.js](https://github.com/naptha/tesseract.js) 6.0.1 mit Core 6.0.0 und deutschem Sprachmodell (`tessdata_best`), Apache-2.0 (siehe `ocr/LICENSE-*`) |
 | `fonts/` | Bricolage Grotesque und IBM Plex Mono, SIL Open Font License (siehe `fonts/LICENSE-*`) |
 | `sw.js` | Service Worker – hält die App offline verfügbar. Bei Änderungen `VERSION` erhöhen; bei neuen Dateien in `ocr/` zusätzlich `OCR_CACHE`. |
-| `manifest.webmanifest`, `icon-*.png` | Installation und App-Icons |
+| `manifest.webmanifest`, `icon-*.png`, `screenshot-*.png` | Installation (mit Screenshots für den Installationsdialog), App-Icons, Verknüpfungen |

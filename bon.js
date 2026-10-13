@@ -158,7 +158,8 @@
   // Preis: Ziffern, Komma/Punkt, zwei Ziffern; eine dritte Ziffer direkt dahinter ist meist das Steuerkürzel «A»
   const PREIS = /(-?\s?\d{1,4})[.,](\d{2})\d?(?![\d.,])/g;
   const STOPP = /\b(total|summe|zu bezahlen|zu zahlen|dein lidl preis|zwischensumme|bar\b|karte|twint|rückgeld|ruckgeld|kreditkarte|maestro|visa|mastercard|postfinance|mwst|mehrwertsteuer|kundenbeleg|buchung)/i;
-  const KOPF = /(kundenhotline|www\.|bonkopie|kundeninformation|name:|stra(ss|ß)e:|plz|ort:|filiale|tel\.|telefon|uid|mwst-?nr|che-\d)/i;
+  // Kopf, Adresse, Kasse, Zeit, Grussformeln – solche Zeilen sind nie Artikel
+  const KOPF = /(kundenhotline|hotline|www\.|https?:|@|\.ch\b|\.com\b|bonkopie|kundeninformation|kundenkarte|name:|stra(ss|ß)e|str\.\s*\d|\bweg\s+\d|gasse\s+\d|platz\s+\d|\bplz\b|ort:|filiale|\btel\b|tel\.|telefon|\bfax\b|\buid\b|mwst-?nr|mwst\.?\s?nr|che-?\s?\d|\b\d{4}\s+[a-zäöü]{3,}|öffnungszeit|offnungszeit|montag|mo\.?\s*-\s*(fr|sa)|vielen dank|danke für|danke fur|merci|bis bald|auf wiedersehen|kasse\s*\d|kassier|bedient|bon[- ]?nr|beleg[- ]?nr|transaktion|terminal|trm-id|\baid\b|datum|uhrzeit|\b\d{1,2}:\d{2}(:\d{2})?\b|anzahl artikel|\d+\s+artikel\b|genossenschaft|\bag\b\s*$|\bgmbh\b)/i;
   const RABATT = /(rabatt|aktion|reduziert|ermässigung|ermassigung|gutschein|cumulus|supercard|plus|-\s?\d+\s?%)/i;
   const MENGE = /(?:^|\s)(\d{1,2})\s*[x×*]\s*(\d{1,4}[.,]\d{2})/i;
   const GEWICHT = /(\d{1,3}[.,]?\d{3})\s*k[gaq9]\s*[x×*-]*\s*(\d{1,4}[.,]\d{2})/i;
@@ -311,12 +312,14 @@
   const istPreisWort = t => /^-?\d{1,4}[.,]\d{2}[A-Z0-9]?$/.test(t);
 
   // Eine Quittung auslesen: Durchgang 1 für Namen und Lage der Preisspalte, Durchgang 2 nur für die Preise
+  let letzte = null; // Wörter mit Position der letzten Seite (für die Textebene im PDF)
   async function bildAuslesen(w, bild, melden) {
     await w.setParameters({ tessedit_pageseg_mode: "6", tessedit_char_whitelist: "" });
     fortschrittTeil = [0, 0.7]; 
     const a = await w.recognize(bild, {}, { text: true, tsv: true });
     const alle = woerter(a.data.tsv);
     const W = bild.width;
+    letzte = { breite: bild.width, hoehe: bild.height, woerter: alle.map(x => ({ t: x.text, x0: x.x0, y0: x.y0, x1: x.x1, y1: x.y1 })), text: a.data.text || "" };
     const preisWoerter = alle.filter(x => istPreisWort(x.text) && x.x0 > W * 0.45);
     if (preisWoerter.length < 3) return a.data.text || "";
     const xs = preisWoerter.map(x => x.x0).sort((p, q) => p - q);
@@ -350,8 +353,13 @@
     // erster Betrag im Text; was direkt danach folgt (meist das «A»), wird ignoriert
     const sauberA = t => { const m = String(t).match(/(?:^|[\s(])(-?\d{1,3})[.,](\d{2})/); return m ? Number(m[1]) + "." + m[2] : ""; };
     const zeilen = [];
+    // Der Ziffern-Durchgang allein zählt nur im Artikelblock (zwischen erster und letzter sauber gelesener Preiszeile) –
+    // sonst werden Hausnummern, Postleitzahlen oder Telefonnummern im Kopf zu «Preisen»
+    const mitA = namenZeilen.map(z => !!sauberA(z.rest)), ersteA = mitA.indexOf(true), letzteA = mitA.lastIndexOf(true);
     namenZeilen.forEach((z, i) => {
-      const a = sauberA(z.rest), b = preisVon.get(i) || "";
+      const a = sauberA(z.rest);
+      let b = preisVon.get(i) || "";
+      if (!a && b && (ersteA < 0 || i < ersteA - 1 || i > letzteA + 2)) b = "";
       if (/total|summe|dein lidl preis|karte|mwst/i.test(z.text)) { if (a) zeilen.push(z.text + "   " + a); if (b) zeilen.push(z.text + "   " + b); if (!a && !b) zeilen.push(z.text + "   " + z.rest); return; }
       let wahl = a || b;
       if (wahl && Number(wahl) < 0 && !RABATT.test(z.text)) wahl = String(Math.abs(Number(wahl)));
@@ -379,7 +387,7 @@
   // Ein einzelnes Foto lesen (für die App: jedes Foto einzeln, Ergebnis danach mit ausTexten zusammenführen)
   // melden(phase, anteil): phase = "laden" | "vorbereiten" | "lesen"
   let abbruch = null;
-  async function bildText(blob, melden) {
+  async function bildText(blob, melden, opt) {
     const melde = (ph, p) => { try { if (melden) melden(ph, p); } catch (e) { } };
     const stop = new Promise((_, rej) => { abbruch = () => rej(Object.assign(new Error("abgebrochen"), { abgebrochen: true })); });
     const arbeit = (async () => {
@@ -391,7 +399,7 @@
       const w = await worker();
       melde("vorbereiten", 0);
       await new Promise(r => setTimeout(r, 30));
-      const bild = await vorbereiten(blob);
+      const bild = await vorbereiten(blob, opt || {});
       melde("lesen", 0);
       return await bildAuslesen(w, bild);
     })();
@@ -408,5 +416,5 @@
     if (p) { try { (await p).terminate(); } catch (e) { } }
   }
 
-  window.Bon = { auslesen, bildText, ausTexten, parsen, vorbereiten, bildAuslesen, abbrechen, vorab: laden_vorab, setzeBasis: b => { basis = b; } };
+  window.Bon = { letzte: () => letzte, auslesen, bildText, ausTexten, parsen, vorbereiten, bildAuslesen, abbrechen, vorab: laden_vorab, setzeBasis: b => { basis = b; } };
 })();

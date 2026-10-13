@@ -116,7 +116,16 @@ const ICONS = {
   mobilitaet: '<rect x="5" y="3.5" width="14" height="13.5" rx="2.5"/><path d="M5 10.5h14M8.5 20.5l1.8-3.5M15.5 20.5 13.7 17M9 13.8v.01M15 13.8v.01M10 6.5h4"/>',
   essen: '<path d="M3.5 10h17l-2 10.5h-13z"/><path d="m7.5 10 4-6M16.5 10l-4-6M9 13.5v3.5M12 13.5v3.5M15 13.5v3.5"/>',
   freizeit: '<path d="M12 20s-7.5-4.6-7.5-10.4A4.1 4.1 0 0 1 12 7.3a4.1 4.1 0 0 1 7.5 2.3C19.5 15.4 12 20 12 20z"/>',
-  ruecklagen: '<path d="M3 12.5a9 9 0 0 1 18 0z"/><path d="M12 12.5v6.5a2 2 0 0 1-4 0M12 3.5v-1"/>'
+  ruecklagen: '<path d="M3 12.5a9 9 0 0 1 18 0z"/><path d="M12 12.5v6.5a2 2 0 0 1-4 0M12 3.5v-1"/>',
+  // Scanner und Ablage
+  scan: '<path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8 8.5h8M8 12h8M8 15.5h5"/>',
+  licht: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1v.5h5V16c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',
+  blitzauto: '<path d="M13 3 6 13.5h5L10 21l7-10.5h-5z"/>',
+  drehen: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',
+  zauber: '<path d="m4 20 11-11M14 4l1 2.5L17.5 7 15 8l-1 2.5L13 8l-2.5-1L13 6zM19 13l.6 1.4L21 15l-1.4.6L19 17l-.6-1.4L17 15l1.4-.6z"/>',
+  rahmen: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16M9 4v16"/>',
+  ordner: '<path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4.2l2 2.2H19a1.5 1.5 0 0 1 1.5 1.5v8.3A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18z"/>',
+  pdf: '<path d="M6 2.5h8.5L19 7v13.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-17a1 1 0 0 1 1-1z"/><path d="M14 2.5V7h5M8.5 13h7M8.5 16.5h7M8.5 9.5h3"/>'
 };
 function icon(name, cls) {
   const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -132,12 +141,14 @@ function katSymbol(katId, klein) { const k = KAT(katId); return h("span", { clas
 const DB = (() => {
   let offen;
   const oeffnen = () => offen || (offen = new Promise((res, rej) => {
-    const r = indexedDB.open("kasse-unterwegs", 1);
-    r.onupgradeneeded = () => { r.result.createObjectStore("kv"); r.result.createObjectStore("fotos"); };
+    // Version 2: «ablage» für gescannte Quittungen
+    const r = indexedDB.open("kasse-unterwegs", 2);
+    r.onupgradeneeded = () => { const db = r.result; for (const n of ["kv", "fotos", "ablage"]) if (!db.objectStoreNames.contains(n)) db.createObjectStore(n); };
     r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
   }));
   const tx = async (store, modus, fn) => { const db = await oeffnen(); return new Promise((res, rej) => { const t = db.transaction(store, modus); const anf = fn(t.objectStore(store)); t.oncomplete = () => res(anf ? anf.result : undefined); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); }); };
-  return { get: (s, k) => tx(s, "readonly", st => st.get(k)), set: (s, k, v) => tx(s, "readwrite", st => st.put(v, k)), del: (s, k) => tx(s, "readwrite", st => st.delete(k)) };
+  return { get: (s, k) => tx(s, "readonly", st => st.get(k)), set: (s, k, v) => tx(s, "readwrite", st => st.put(v, k)), del: (s, k) => tx(s, "readwrite", st => st.delete(k)),
+    alle: s => tx(s, "readonly", st => st.getAll()), schluessel: s => tx(s, "readonly", st => st.getAllKeys()) };
 })();
 // zuordnung: Bon-Text → { n: Produktname, g: Packungsgrösse } – lernt aus jeder Korrektur, bleibt auf dem Handy
 // budget: Monatsbudget (wird mit der Haushaltskasse abgeglichen)

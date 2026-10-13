@@ -1,7 +1,7 @@
 {
   "name": "Haushaltskasse unterwegs",
   "short_name": "Kasse",
-  "description": "Einkaufsliste, Vorrat, Preise und Quittungen – auch ohne Netz. Begleit-App zur Haushaltskasse von Simon und Eliana.",
+  "description": "Einkaufsliste, Quittungen scannen, Preise vergleichen und Budget – auch ohne Netz. Begleit-App zur Haushaltskasse von Simon und Eliana.",
   "lang": "de-CH",
   "start_url": "./",
   "scope": "./",
@@ -10,8 +10,91 @@
   "background_color": "#f5f0e6",
   "theme_color": "#f5f0e6",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "./",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "categories": [
+    "finance",
+    "food",
+    "shopping"
+  ],
+  "shortcuts": [
+    {
+      "name": "Quittung scannen",
+      "short_name": "Scannen",
+      "url": "./?tab=erfassen&scan=1",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Einkaufsliste",
+      "short_name": "Liste",
+      "url": "./?tab=liste",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Budget",
+      "short_name": "Budget",
+      "url": "./?tab=budget",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshot-liste.png",
+      "sizes": "1080x2340",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Einkaufsliste mit günstigstem Laden"
+    },
+    {
+      "src": "screenshot-quittung.png",
+      "sizes": "1080x2340",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Gescannte Quittung mit Preisvergleich"
+    },
+    {
+      "src": "screenshot-budget.png",
+      "sizes": "1080x2340",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Monatsbudget für zwei"
+    }
   ]
 }

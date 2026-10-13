@@ -69,9 +69,30 @@ async function aufraeumen() {
 }
 
 /* ---------- Einstellungen ---------- */
+// Installieren: Chrome meldet mit «beforeinstallprompt», dass die App installierbar ist – dann zeigt die App einen eigenen Knopf.
 let installEreignis = null;
-addEventListener("beforeinstallprompt", ev => { ev.preventDefault(); installEreignis = ev; $("#install-btn").hidden = false; $("#install-info").textContent = ""; });
-$("#install-btn").onclick = async () => { if (!installEreignis) return; installEreignis.prompt(); await installEreignis.userChoice.catch(() => null); installEreignis = null; $("#install-btn").hidden = true; };
+const istInstalliert = () => matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: fullscreen)").matches || navigator.standalone === true;
+function installZeigen() {
+  const weg = (() => { try { return Number(localStorage.getItem("kasse-install-weg") || 0); } catch (e) { return 0; } })();
+  const banner = $("#install-banner");
+  if (istInstalliert() || Date.now() - weg < 14 * 864e5) { banner.hidden = true; return; }
+  banner.hidden = false;
+  $("#install-banner-btn").hidden = !installEreignis;
+  $("#install-text").textContent = installEreignis ? "Startet wie eine richtige App – eigenes Symbol, ohne Browserleiste, auch offline."
+    : "In Chrome: Menü ⋮ → «App installieren». Steht dort nur «Zum Startbildschirm hinzufügen», zuerst die alte Verknüpfung vom Startbildschirm entfernen und die Seite neu laden.";
+}
+async function installieren() {
+  if (!installEreignis) { installZeigen(); return; }
+  installEreignis.prompt();
+  const wahl = await installEreignis.userChoice.catch(() => null);
+  installEreignis = null; $("#install-btn").hidden = true; installZeigen();
+  if (wahl && wahl.outcome === "accepted") toast("Wird installiert – danach über das neue App-Symbol öffnen");
+}
+addEventListener("beforeinstallprompt", ev => { ev.preventDefault(); installEreignis = ev; $("#install-btn").hidden = false; $("#install-info").textContent = ""; installZeigen(); });
+addEventListener("appinstalled", () => { installEreignis = null; $("#install-banner").hidden = true; toast("App installiert"); });
+$("#install-btn").onclick = installieren;
+$("#install-banner-btn").onclick = installieren;
+$("#install-banner-zu").onclick = () => { try { localStorage.setItem("kasse-install-weg", String(Date.now())); } catch (e) { } $("#install-banner").hidden = true; };
 function zeichneSpeicher() {
   const standalone = matchMedia("(display-mode: standalone)").matches;
   $("#install-info").textContent = standalone ? "Als App installiert." : installEreignis ? "" : "Zum Installieren im Chrome-Menü (⋮) «App installieren» tippen.";
@@ -93,7 +114,14 @@ function alles() { zeichneStand(); zeichneListe(); zeichneVorrat(); zeichnePreis
   segBauen("g-wer", [...PERSONEN.map(p => [p, p]), ["Zusammen", "Zusammen"]], G.wer, v => G.wer = v);
   segBauen("ich", PERSONEN.map(p => [p, p]), L.ich, async v => { L.ich = v; await sichern("ich"); F.wer = Q.wer = v; segBauen("q-wer", PERSONEN.map(p => [p, p]), v, w => Q.wer = w); fLeeren(); });
   gSterne(); fLeeren(); zeichneQFotos(); zeichneSpeicher(); alles();
+  await Ablage.laden(); Ablage.zeichnen();
+  await entwurfLaden();
+  installZeigen();
+  // App-Verknüpfungen (lange auf das Symbol tippen): ?tab=…&scan=1
+  const qs = new URLSearchParams(location.search);
   let start = "liste"; try { start = localStorage.getItem("kasse-tab") || "liste"; } catch (e) { }
+  if (qs.get("tab")) start = qs.get("tab");
   tab(["liste", "erfassen", "preise", "budget", "abgleich"].includes(start) ? start : "liste");
+  if (qs.get("scan")) { history.replaceState(null, "", location.pathname); setTimeout(qScannen, 300); }
 })();
 if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => { }));
