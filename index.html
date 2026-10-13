@@ -17,7 +17,7 @@
   --rule: #dce3dc; --rule-strong: #c2ccc4; --accent: #1c6a4f; --accent-hover: #155a42; --on-accent: #ffffff; --accent-wash: #e0ede5;
   --st-coop: #2a78d6; --st-migros: #eb6834; --st-lidl: #1baf7a; --st-denner: #eda100; --st-andere: #e87ba4;
   --good: #0ca30c; --good-ink: #006300; --crit: #d03b3b; --crit-ink: #ad2e2d; --warn: #fab219; --warn-ink: #855600;
-  --crit-wash: #fbe8e7; --good-wash: #e3f2e3;
+  --crit-wash: #fbe8e7; --good-wash: #e3f2e3; --warn-wash: #fff4d6;
   --shadow: 0 1px 2px rgba(23, 34, 28, .06), 0 8px 24px rgba(23, 34, 28, .07);
   --f-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --f-mono: ui-monospace, "Roboto Mono", "SF Mono", Menlo, monospace;
@@ -28,7 +28,7 @@
     --paper: #0f1512; --card: #18201c; --ink: #e5ece7; --ink-2: #b2bfb7; --muted: #8b988f;
     --rule: #29332e; --rule-strong: #3b4741; --accent: #5cbd97; --accent-hover: #78cca9; --on-accent: #0b1912; --accent-wash: #1c2e26;
     --st-coop: #3987e5; --st-migros: #d95926; --st-lidl: #199e70; --st-denner: #c98500; --st-andere: #d55181;
-    --good-ink: #2fbf55; --crit: #e66767; --crit-ink: #ef8080; --warn-ink: #fab219; --crit-wash: #3b2221; --good-wash: #1a3320;
+    --good-ink: #2fbf55; --crit: #e66767; --crit-ink: #ef8080; --warn-ink: #fab219; --crit-wash: #3b2221; --good-wash: #1a3320; --warn-wash: #3a2f12;
     --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 8px 24px rgba(0, 0, 0, .25);
     color-scheme: dark;
   }
@@ -120,6 +120,18 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 .foto .weg { position: absolute; top: -7px; right: -7px; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--rule-strong); background: var(--card); line-height: 1; padding: 0; font-size: 15px; }
 .art-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 6px; align-items: center; padding-bottom: 8px; border-bottom: 1px dashed var(--rule); }
 .art-row .p-name { grid-column: 1 / -1; }
+.art-row.pruefen { background: var(--warn-wash); border-left: 3px solid var(--warn); border-bottom-style: solid; border-radius: 6px; padding: 8px 8px 8px 7px; }
+.art-row .bon { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+.art-row .bon button.pill { cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; background: var(--card); }
+.lese { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--paper); }
+.lese .titel { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-weight: 600; font-size: 14px; }
+.balken { height: 8px; border-radius: 4px; background: var(--rule); overflow: hidden; }
+.balken i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 4px; transition: width .4s ease; }
+.notice.ok { border-color: var(--good); }
+.notice.fehler { border-color: var(--crit); }
+details.mehr { border-top: 1px solid var(--rule); padding-top: 10px; }
+details.mehr summary { cursor: pointer; font-size: 13.5px; color: var(--ink-2); font-weight: 500; }
+details.mehr[open] summary { margin-bottom: 12px; }
 .art-row input, .art-row select { padding: 7px 8px; font-size: 14px; }
 .wartet { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 9px 2px; border-bottom: 1px solid var(--rule); }
 .wartet .sub { font-size: 12.5px; color: var(--muted); }
@@ -173,7 +185,7 @@ td.besser { color: var(--warn-ink); font-weight: 600; }
     <!-- ERFASSEN -->
     <section id="p-erfassen" aria-labelledby="t-erfassen" hidden>
       <div class="card">
-        <div class="kopf"><div><h2>Quittung fotografieren</h2><p>Wird später in der Haushaltskasse von Claude ausgelesen und verglichen</p></div></div>
+        <div class="kopf"><div><h2>Quittung fotografieren</h2><p>Laden, Datum, Artikel und Preise werden direkt auf dem Handy gelesen – auch offline</p></div></div>
         <div class="form">
           <div class="fotos" id="q-fotos" hidden></div>
           <div class="row">
@@ -182,20 +194,27 @@ td.besser { color: var(--warn-ink); font-weight: 600; }
             <input type="file" id="q-kamera" accept="image/*" capture="environment" class="sr" tabindex="-1">
             <input type="file" id="q-galerie" accept="image/*" multiple class="sr" tabindex="-1">
           </div>
-          <p class="hint">Lange Quittung? In zwei, drei Teilen von oben nach unten fotografieren.</p>
-          <div class="zeile">
-            <div class="f" style="display:grid;gap:4px"><span class="small muted">Bezahlt von</span><div class="seg" role="group" aria-label="Bezahlt von" id="q-wer"></div></div>
-            <div class="f" style="display:grid;gap:4px"><span class="small muted">Aufteilung</span><div class="seg" role="group" aria-label="Aufteilung" id="q-teil"></div></div>
-          </div>
-          <label class="f">Notiz<input type="text" id="q-notiz" placeholder="optional"></label>
-          <div class="row"><button class="btn primary" id="q-speichern" disabled>Quittung speichern</button></div>
+          <p class="hint">Quittung flach hinlegen, gerade und nah fotografieren. Lange Quittung? In zwei, drei Teilen von oben nach unten.</p>
+          <div id="q-status" aria-live="polite" hidden></div>
+          <details class="mehr" id="q-mehr">
+            <summary>Nur das Foto aufheben – Claude liest es später</summary>
+            <div class="form">
+              <div class="zeile">
+                <div class="f" style="display:grid;gap:4px"><span class="small muted">Bezahlt von</span><div class="seg" role="group" aria-label="Bezahlt von" id="q-wer"></div></div>
+                <div class="f" style="display:grid;gap:4px"><span class="small muted">Aufteilung</span><div class="seg" role="group" aria-label="Aufteilung" id="q-teil"></div></div>
+              </div>
+              <label class="f">Notiz<input type="text" id="q-notiz" placeholder="optional"></label>
+              <div class="row"><button class="btn" id="q-speichern" disabled>Foto aufheben</button></div>
+            </div>
+          </details>
         </div>
         <div id="q-liste" style="margin-top:12px"></div>
       </div>
 
-      <div class="card">
-        <div class="kopf"><div><h2>Von Hand erfassen</h2><p>Mit Preisvergleich gegen eure bisherigen Einkäufe</p></div></div>
+      <div class="card" id="f-card">
+        <div class="kopf"><div><h2>Prüfen &amp; speichern</h2><p>Füllt sich nach dem Foto von selbst – oder von Hand erfassen. Mit Preisvergleich.</p></div></div>
         <form class="form" id="f-form" novalidate>
+          <div id="f-bon" hidden></div>
           <div class="seg" role="group" aria-label="Art" id="f-typ"></div>
           <div id="f-laden-wrap" class="form" style="gap:6px"><span class="small muted">Laden</span><div class="chips" id="f-laden"></div><input type="text" id="f-laden-andere" placeholder="Name des Ladens" hidden></div>
           <label class="f" id="f-resto-wrap" hidden>Restaurant / Ort<input type="text" id="f-resto" list="dl-restos" placeholder="z. B. Pizzeria, Take-away"></label>
@@ -291,6 +310,8 @@ td.besser { color: var(--warn-ink); font-weight: 600; }
 <datalist id="dl-restos"></datalist>
 <div id="toast" role="status" aria-live="polite" hidden></div>
 
+<script src="ocr/tesseract.min.js"></script>
+<script src="bon.js"></script>
 <script>
 "use strict";
 const PERSONEN = ["Simon", "Eliana"];
@@ -488,7 +509,8 @@ function vergleichPanel(artikel, laden, datum, ohnePwaId) {
   const vz = x => (x >= 0 ? "+" : "−") + fmt(Math.abs(x));
   const t = v.filter(x => x.status === "teurer"), g = v.filter(x => x.status === "guenstiger"), n = v.filter(x => x.status === "neu"), b = v.filter(x => x.besser);
   const rang = x => ({ teurer: 0, guenstiger: 2, anders: 3, neu: 4, gleich: 5 }[x.status] - (x.besser ? 0.5 : 0));
-  return h("div", { class: "vergleich" },
+  const sortiert = v.slice().sort((a, b2) => rang(a) - rang(b2)), tabelle = vergleichTabelle(sortiert);
+  const panel = h("div", { class: "vergleich" },
     h("h3", null, "Preisvergleich" + (laden ? " · " + laden : "")),
     h("div", { class: "chips", style: "margin:8px 0" },
       t.length ? h("span", { class: "pill crit" }, `▲ ${t.length} teurer · ${vz(t.reduce((s, x) => s + x.diffChf, 0))}`) : null,
@@ -496,13 +518,25 @@ function vergleichPanel(artikel, laden, datum, ohnePwaId) {
       b.length ? h("span", { class: "pill warn" }, `${b.length} anderswo günstiger`) : null,
       n.length ? h("span", { class: "pill acc" }, `${n.length} neu`) : null,
       !t.length && !g.length && !b.length ? h("span", { class: "pill" }, L.stand ? "keine Preisänderungen" : "Stand laden für den Vergleich") : null),
-    h("div", { class: "tbl-wrap" }, h("table", null,
+    tabelle);
+  // Lange Quittungen: zuerst nur, was sich verändert hat; neue und gleiche Preise auf Wunsch
+  const unwichtig = x => (x.status === "neu" || x.status === "gleich") && !x.besser;
+  const zeilen = $$("tbody tr", tabelle), versteckt = v.length > 8 ? zeilen.filter((tr, i) => unwichtig(sortiert[i])) : [];
+  if (!versteckt.length) return panel;
+  for (const tr of versteckt) tr.hidden = true;
+  if (versteckt.length === zeilen.length) tabelle.hidden = true;
+  const knopf = h("button", { type: "button", class: "btn small", style: "margin-top:8px", onclick: () => { for (const tr of versteckt) tr.hidden = false; tabelle.hidden = false; knopf.remove(); } }, `Alle ${v.length} Artikel zeigen`);
+  panel.appendChild(knopf);
+  return panel;
+}
+function vergleichTabelle(sortiert) {
+  return h("div", { class: "tbl-wrap" }, h("table", null,
       h("thead", null, h("tr", null, h("th", null, "Artikel"), h("th", { class: "r" }, "Jetzt"), h("th", { class: "r" }, "Letztes Mal"), h("th", { class: "r" }, "Änderung"), h("th", null, "Anderswo"))),
-      h("tbody", null, v.slice().sort((a, b2) => rang(a) - rang(b2)).map(x => h("tr", { class: "vg-" + x.status },
+      h("tbody", null, sortiert.map(x => h("tr", { class: "vg-" + x.status },
         h("td", null, x.a.n), h("td", { class: "r" }, fmt(x.gp) + "/" + x.gpE),
         h("td", { class: "r" }, x.vorher ? `${fmt(x.vorher.gp)} · ${datumKurz(x.vorher.datum)}` : "–"),
         h("td", { class: "r" }, x.status === "neu" ? h("span", { class: "pill acc" }, "neu") : x.d == null ? h("span", { class: "muted small" }, "erstmals hier") : Math.abs(x.d) < 0.005 ? h("span", { class: "muted" }, "gleich") : aenderung(x.d)),
-        h("td", { class: x.besser ? "besser" : null }, x.besser ? `${x.besser.laden} ${fmt(x.besser.gp)}` : "")))))));
+        h("td", { class: x.besser ? "besser" : null }, x.besser ? `${x.besser.laden} ${fmt(x.besser.gp)}` : ""))))));
 }
 function produkte() {
   const map = new Map();
@@ -551,8 +585,9 @@ $("#pr-form").addEventListener("submit", async ev => {
   if (await sichern("preise")) { toast("Preis notiert"); $("#pr-form").reset(); $("#pr-form").hidden = true; $("#pr-vergleich").replaceChildren(); zeichnePreise(); zeichneStand(); }
 });
 
-/* ---------- Quittung fotografieren ---------- */
-const Q = { fotos: [], wer: "Simon", teil: "geteilt" };
+/* ---------- Quittung fotografieren und auf dem Handy auslesen ---------- */
+// Jedes Foto wird einzeln gelesen (Text bleibt am Foto), danach werden alle Teile zusammen ausgewertet.
+const Q = { fotos: [], wer: "Simon", teil: "geteilt", laeuft: false, stopp: false };
 async function verkleinern(file) {
   try {
     const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
@@ -565,27 +600,156 @@ async function verkleinern(file) {
 function zeichneQFotos() {
   const box = $("#q-fotos"); box.replaceChildren(); box.hidden = !Q.fotos.length;
   Q.fotos.forEach((f, i) => box.appendChild(h("div", { class: "foto" }, h("img", { src: f.url, alt: "Teil " + (i + 1) }), h("span", { class: "nr" }, String(i + 1)),
-    h("button", { type: "button", class: "weg", "aria-label": "Foto " + (i + 1) + " entfernen", onclick: () => { URL.revokeObjectURL(f.url); Q.fotos.splice(i, 1); zeichneQFotos(); } }, "×"))));
+    h("button", { type: "button", class: "weg", "aria-label": "Foto " + (i + 1) + " entfernen", onclick: () => qWeg(f) }, "×"))));
   $("#q-kamera-txt").textContent = Q.fotos.length ? "Nächster Teil" : "Foto aufnehmen";
   $("#q-kamera-lab").classList.toggle("primary", !Q.fotos.length);
   $("#q-speichern").disabled = !Q.fotos.length;
 }
 async function qHinzu(files) {
-  for (const f of Array.from(files || [])) { if (Q.fotos.length >= 5) { toast("Höchstens 5 Fotos pro Quittung."); break; } const b = await verkleinern(f); Q.fotos.push({ blob: b, url: URL.createObjectURL(b) }); }
-  zeichneQFotos();
+  for (const f of Array.from(files || [])) {
+    if (Q.fotos.length >= 5) { toast("Höchstens 5 Fotos pro Quittung."); break; }
+    const b = await verkleinern(f);
+    Q.fotos.push({ orig: f, blob: b, url: URL.createObjectURL(b), text: null, fehler: false });
+  }
+  zeichneQFotos(); qLesen();
 }
+function qWeg(f) {
+  URL.revokeObjectURL(f.url); Q.fotos = Q.fotos.filter(x => x !== f); zeichneQFotos();
+  if (!Q.fotos.length) { if (Q.laeuft) qStopp(); qStatus(null); return; }
+  if (!Q.laeuft) qAuswerten();
+}
+function qLeeren() {
+  if (Q.laeuft) qStopp();
+  for (const f of Q.fotos) URL.revokeObjectURL(f.url);
+  Q.fotos = []; $("#q-notiz").value = ""; zeichneQFotos(); qStatus(null);
+}
+function qStopp() { Q.stopp = true; if (window.Bon) Bon.abbrechen(); }
 $("#q-kamera").addEventListener("change", ev => { qHinzu(ev.target.files); ev.target.value = ""; });
 $("#q-galerie").addEventListener("change", ev => { qHinzu(ev.target.files); ev.target.value = ""; });
+
+// Anzeige im Kasten unter den Fotos: Fortschritt, Ergebnis oder Fehler
+function qStatus(art, text, nochmals) {
+  const box = $("#q-status"); box.replaceChildren(); delete box.dataset.lauf;
+  box.hidden = !art;
+  if (!art) return;
+  box.appendChild(h("div", { class: "notice " + art },
+    text,
+    nochmals ? h("div", { class: "row", style: "margin-top:8px" }, h("button", { type: "button", class: "btn small", onclick: () => { for (const f of Q.fotos) { f.fehler = false; } qLesen(); } }, "Nochmals auslesen")) : null,
+    art === "ok" ? h("div", { class: "row", style: "margin-top:8px" }, h("button", { type: "button", class: "btn small primary", onclick: () => $("#f-card").scrollIntoView({ behavior: "smooth", block: "start" }) }, "Zur Kontrolle")) : null));
+}
+const PHASEN = { laden: "Texterkennung wird geladen …", vorbereiten: "Foto wird aufbereitet …", lesen: "Artikel und Preise werden gelesen …" };
+function qFortschritt(phase, p, nr, von) {
+  const box = $("#q-status");
+  if (!box.dataset.lauf) {
+    box.replaceChildren(); box.hidden = false; box.dataset.lauf = "1";
+    box.appendChild(h("div", { class: "lese" },
+      h("div", { class: "titel" }, h("span", { id: "q-phase" }), h("span", { class: "num small muted", id: "q-prozent" })),
+      h("div", { class: "balken", role: "progressbar", "aria-label": "Fortschritt", "aria-valuemin": "0", "aria-valuemax": "100", id: "q-balken" }, h("i")),
+      h("div", { class: "row", style: "justify-content:space-between;flex-wrap:nowrap" },
+        h("span", { class: "hint", id: "q-tipp" }),
+        h("button", { type: "button", class: "btn small ghost", onclick: () => { qStopp(); } }, "Abbrechen"))));
+  }
+  const anteil = phase === "laden" ? 0.04 * p : phase === "vorbereiten" ? 0.07 : 0.1 + 0.9 * p;
+  const gesamt = Math.max(0, Math.min(1, ((nr - 1) + anteil) / von));
+  $("#q-phase").textContent = PHASEN[phase] + (von > 1 ? ` Foto ${nr} von ${von}` : "");
+  $("#q-prozent").textContent = Math.round(gesamt * 100) + " %";
+  $("#q-balken").setAttribute("aria-valuenow", String(Math.round(gesamt * 100)));
+  $("#q-balken").firstChild.style.width = (gesamt * 100).toFixed(1) + "%";
+  $("#q-tipp").textContent = phase === "laden" ? "Beim ersten Mal werden einmalig rund 5 MB geladen, danach klappt es auch offline." : "Dauert etwa eine halbe Minute pro Foto. Die App kann so lange offen bleiben.";
+}
+async function qLesen() {
+  if (Q.laeuft || !Q.fotos.length) return;
+  if (!window.Bon || !window.Tesseract) { qStatus("fehler", "Die Texterkennung ist noch nicht auf dem Handy. Die App einmal mit Internet öffnen – oder unten von Hand erfassen."); return; }
+  Q.laeuft = true; Q.stopp = false;
+  let abgebrochen = false;
+  try {
+    let f;
+    while (!Q.stopp && (f = Q.fotos.find(x => x.text == null && !x.fehler))) {
+      const foto = f, nr = () => Math.max(1, Q.fotos.indexOf(foto) + 1);
+      qFortschritt("laden", 0, nr(), Q.fotos.length);
+      const melden = (ph, p) => { if (!Q.stopp) qFortschritt(ph, p, nr(), Q.fotos.length); };
+      try { foto.text = await Bon.bildText(foto.orig, melden); }
+      catch (e) {
+        if (e && e.abgebrochen) { abgebrochen = true; break; }
+        // Original liess sich nicht öffnen (z. B. ungewohntes Format): verkleinerte Kopie versuchen
+        try { foto.text = await Bon.bildText(foto.blob, melden); }
+        catch (e2) { if (e2 && e2.abgebrochen) { abgebrochen = true; break; } foto.fehler = true; }
+      }
+    }
+  } finally { Q.laeuft = false; }
+  if (abgebrochen || Q.stopp) { Q.stopp = false; if (Q.fotos.length) qStatus("info", "Auslesen abgebrochen.", true); return; }
+  qAuswerten();
+}
+function qAuswerten() {
+  const texte = Q.fotos.filter(f => f.text != null).map(f => f.text), fehler = Q.fotos.filter(f => f.fehler).length;
+  if (!texte.length) { qStatus("fehler", "Das Foto liess sich nicht lesen. Bitte nochmals gerade, nah und hell fotografieren – oder unten von Hand erfassen.", true); return; }
+  let r = null; try { r = Bon.ausTexten(texte); } catch (e) { r = null; }
+  if (!r || !r.artikel.length) { qStatus("fehler", "Auf dem Foto wurden keine Artikel gefunden. Die ganze Quittung gerade und scharf fotografieren – oder unten von Hand erfassen.", true); return; }
+  formAusBon(r);
+  const pruefen = r.artikel.filter(a => a.unsicher || a.fehlt).length;
+  qStatus("ok", h("span", null, h("b", null, `${r.artikel.length} Artikel gelesen`), r.laden ? ` · ${r.laden}` : "", r.total > 0 ? ` · Total ${fmt(r.total)}` : "", ". ",
+    pruefen ? `${pruefen} gelb markierte ${pruefen === 1 ? "Zeile" : "Zeilen"} bitte mit dem Bon vergleichen, dann speichern.` : "Kurz kontrollieren, dann speichern.",
+    fehler ? ` ${fehler === 1 ? "Ein Foto" : fehler + " Fotos"} liess sich nicht lesen.` : ""));
+  setTimeout(() => $("#f-card").scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+}
+
+// Namen vom Bon («Prosciutto di Parma 2x») auf eure gewohnten Produktnamen abbilden
+const bonKey = t => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9%]+/g, " ").trim();
+function zeichenpaare(t) { const s = " " + t + " ", m = new Map(); for (let i = 0; i < s.length - 1; i++) { const g = s.slice(i, i + 2); m.set(g, (m.get(g) || 0) + 1); } return m; }
+function aehnlich(a, b) {
+  const A = zeichenpaare(a), B = zeichenpaare(b); let gleich = 0, na = 0, nb = 0;
+  for (const v of A.values()) na += v; for (const v of B.values()) nb += v;
+  for (const [g, v] of A) gleich += Math.min(v, B.get(g) || 0);
+  return 2 * gleich / ((na + nb) || 1);
+}
+function namenFinder() {
+  const bon = new Map();
+  const bn = L.stand && L.stand.bonNamen;
+  if (bn && typeof bn === "object") for (const [b, n] of Object.entries(bn)) if (b && n) bon.set(bonKey(b), String(n));
+  for (const e of L.eintraege) for (const a of e.artikel || []) if (a.b && a.n) bon.set(bonKey(a.b), a.n);
+  const namen = Array.from(new Set(beobachtungen().map(o => o.name))).map(n => [bonKey(n), n]);
+  return b => {
+    const k = bonKey(b); if (!k) return b;
+    if (bon.has(k)) return bon.get(k);
+    let best = null, w = 0;
+    for (const [kk, n] of bon) { const x = aehnlich(k, kk); if (x > w) { w = x; best = n; } }
+    if (w >= 0.75) return best;
+    best = null; w = 0;
+    for (const [kk, n] of namen) { const x = aehnlich(k, kk); if (x > w) { w = x; best = n; } }
+    return w >= 0.8 ? best : b;
+  };
+}
+// Gelesene Quittung ins Formular «Prüfen & speichern» übernehmen
+function formAusBon(r) {
+  fLeeren();
+  F.ausBon = true;
+  F.laden = r.laden || "";
+  $("#f-laden-andere").value = LAEDEN.includes(F.laden) ? "" : F.laden;
+  ladenChips();
+  $("#f-datum").value = r.datum || heute();
+  $("#f-betrag").value = r.total > 0 ? r.total.toFixed(2) : "";
+  $("#f-betrag").dispatchEvent(new Event("input"));
+  const name = namenFinder();
+  for (const a of r.artikel) artZeile({ n: name(a.b), b: a.b, q: a.q, e: a.e, p: a.fehlt ? null : a.p, r: a.r, pruefen: !!(a.unsicher || a.fehlt), fehlt: !!a.fehlt });
+  const pruefen = r.artikel.filter(a => a.unsicher || a.fehlt).length;
+  const box = $("#f-bon"); box.hidden = false;
+  box.replaceChildren(h("p", { class: "notice warn" }, h("b", null, "Aus der Quittung gelesen. "),
+    pruefen ? `Gelb markiert: ${pruefen} ${pruefen === 1 ? "Zeile" : "Zeilen"}, bei denen die Erkennung unsicher war – bitte mit dem Bon vergleichen und mit ✓ bestätigen. ` : "Bitte kurz mit dem Bon vergleichen. ",
+    r.laden ? "" : "Laden nicht erkannt – bitte wählen. ",
+    r.datum ? "" : "Datum nicht erkannt – heute eingesetzt. "));
+  fVergleich();
+}
 $("#q-speichern").onclick = async () => {
   if (!Q.fotos.length) return;
+  if (Q.laeuft) qStopp();
   const pwaId = uid(), fotoIds = [];
   try { for (const f of Q.fotos) { const fid = uid(); await DB.set("fotos", fid, f.blob); fotoIds.push(fid); } }
   catch (e) { toast("Die Fotos liessen sich nicht speichern. Ist der Speicher voll?"); return; }
   L.quittungen.push({ pwaId, datum: heute(), bezahlt: Q.wer, teilung: Q.teil, notiz: $("#q-notiz").value.trim(), fotoIds });
   if (await sichern("quittungen")) {
-    for (const f of Q.fotos) URL.revokeObjectURL(f.url);
-    Q.fotos = []; $("#q-notiz").value = ""; zeichneQFotos(); zeichneQListe();
-    toast("Quittung gespeichert – beim nächsten Abgleich wird sie ausgelesen");
+    qLeeren(); $("#q-mehr").open = false; zeichneQListe();
+    if (F.ausBon) fLeeren();
+    toast("Foto aufgehoben – beim nächsten Abgleich liest Claude es aus");
   }
 };
 async function zeichneQListe() {
@@ -620,22 +784,37 @@ function fTyp(v) { F.typ = v; $("#f-laden-wrap").hidden = v !== "einkauf"; $("#f
 function artZeile(a) {
   a = a || {};
   const name = h("input", { type: "text", class: "p-name", list: "dl-produkte", placeholder: "Produkt", value: a.n || "", "aria-label": "Produkt" });
-  const menge = h("input", { type: "text", inputmode: "decimal", placeholder: "Menge", "aria-label": "Menge" });
+  const menge = h("input", { type: "text", inputmode: "decimal", placeholder: "Menge", "aria-label": "Menge", value: Number(a.q) > 0 ? String(a.q) : "" });
   const einheit = h("select", { "aria-label": "Einheit" }, EINHEITEN.map(e => h("option", { value: e }, e || "–")));
-  const preis = h("input", { type: "text", inputmode: "decimal", placeholder: "Preis", "aria-label": "Preis CHF" });
-  const row = h("div", { class: "art-row" }, name, menge, einheit, preis, h("button", { type: "button", class: "btn ghost small", "aria-label": "Artikel entfernen", onclick: () => { row.remove(); fVergleich(); } }, "×"));
+  einheit.value = EINHEITEN.includes(a.e) ? a.e : "";
+  const preis = h("input", { type: "text", inputmode: "decimal", placeholder: a.fehlt ? "Preis?" : "Preis", "aria-label": "Preis CHF", value: Number(a.p) > 0 ? Number(a.p).toFixed(2) : "" });
+  const row = h("div", { class: "art-row" + (a.pruefen ? " pruefen" : "") }, name, menge, einheit, preis, h("button", { type: "button", class: "btn ghost small", "aria-label": "Artikel entfernen", onclick: () => { row.remove(); fVergleich(); } }, "×"));
+  row.dataset.b = a.b || ""; row.dataset.r = Number(a.r) > 0 ? String(a.r) : "";
+  // Zeile mit Angaben vom Bon: Originaltext, Rabatt, Hinweis «bitte prüfen»
+  const ok = () => { row.classList.remove("pruefen"); if (knopf) knopf.remove(); knopf = null; };
+  let knopf = a.pruefen ? h("button", { type: "button", class: "pill warn", "aria-label": "Preis geprüft", onclick: ok }, a.fehlt ? "Preis fehlt" : "bitte prüfen ✓") : null;
+  const bonText = a.b && schluessel(a.b) !== schluessel(a.n) ? "Bon: " + a.b : "";
+  if (knopf || bonText || Number(a.r) > 0) row.appendChild(h("div", { class: "bon" }, knopf, bonText ? h("span", null, bonText) : null, Number(a.r) > 0 ? h("span", null, `Rabatt ${fmt(a.r)} abgezogen`) : null));
   for (const el of [name, menge, preis]) el.addEventListener("input", fVergleich);
+  preis.addEventListener("input", () => { if (zahl(preis.value) > 0) ok(); });
   einheit.addEventListener("change", fVergleich);
   $("#f-artikel").appendChild(row); return row;
 }
 function artLesen() {
-  return $$("#f-artikel .art-row").map(r => { const [n, q, e, p] = r.querySelectorAll("input, select"); const pr = zahl(p.value), m = zahl(q.value); return { n: n.value.trim(), q: m > 0 ? m : null, e: e.value || null, p: pr > 0 ? rund(pr) : null, r: 0 }; }).filter(a => a.n && a.p != null);
+  return $$("#f-artikel .art-row").map(r => {
+    const [n, q, e, p] = r.querySelectorAll("input, select"); const pr = zahl(p.value), m = zahl(q.value), rb = Number(r.dataset.r) || 0;
+    const a = { n: n.value.trim(), q: m > 0 ? m : null, e: e.value || null, p: pr > 0 ? rund(pr) : null, r: rb > 0 ? rund(rb) : 0 };
+    if (r.dataset.b) a.b = r.dataset.b;
+    return a;
+  }).filter(a => a.n && a.p != null);
 }
 function fVergleich() {
   const box = $("#f-vergleich"); box.replaceChildren();
   const arts = F.typ === "einkauf" ? artLesen() : [];
-  const s = rund(arts.reduce((x, a) => x + a.p, 0)), b = zahl($("#f-betrag").value);
-  $("#f-art-sum").textContent = arts.length ? `${arts.length} Artikel · Summe ${fmt(s)}` + (b > 0 && Math.abs(b - s) >= 0.01 ? ` · Differenz zum Betrag ${fmt(rund(b - s))}` : "") : "";
+  const s = rund(arts.reduce((x, a) => x + a.p, 0)), b = zahl($("#f-betrag").value), diff = b > 0 ? rund(b - s) : 0;
+  $("#f-art-sum").replaceChildren(...[arts.length ? `${arts.length} Artikel · Summe ${fmt(s)}` : "",
+    arts.length && Math.abs(diff) >= 0.01 ? h("span", { class: F.ausBon ? "up" : null }, ` · Differenz zum Betrag ${diff > 0 ? "+" : "−"}${fmt(Math.abs(diff))}` + (F.ausBon ? " – ein Preis stimmt noch nicht" : "")) : null,
+    arts.length && F.ausBon && Math.abs(diff) < 0.01 && b > 0 ? h("span", { class: "down" }, " · stimmt mit dem Total überein ✓") : null].filter(Boolean));
   if (!arts.length) return;
   const p = vergleichPanel(arts, F.laden, $("#f-datum").value || heute(), null);
   if (p) box.appendChild(p);
@@ -648,6 +827,7 @@ $("#f-betrag").addEventListener("input", () => {
   fVergleich();
 });
 function fLeeren() {
+  F.ausBon = false; $("#f-bon").hidden = true; $("#f-bon").replaceChildren();
   $("#f-form").reset(); $("#f-datum").value = heute(); $("#f-artikel").replaceChildren(); F.teilBeruehrt = false; F.teil = "allein";
   segBauen("f-typ", [["einkauf", "Einkauf"], ["auswaerts", "Auswärts essen"]], "einkauf", fTyp); fTyp("einkauf");
   segBauen("f-wer", PERSONEN.map(p => [p, p]), F.wer, v => F.wer = v);
@@ -660,8 +840,17 @@ $("#f-form").addEventListener("submit", async ev => {
   if (!(betrag > 0)) { toast("Bitte einen Betrag eingeben."); $("#f-betrag").focus(); return; }
   const ort = F.typ === "einkauf" ? (F.laden || $("#f-laden-andere").value.trim()) : $("#f-resto").value.trim();
   if (!ort) { toast(F.typ === "einkauf" ? "Bitte den Laden wählen." : "Bitte das Restaurant eintragen."); return; }
+  if (F.typ === "einkauf") {
+    const ohne = $$("#f-artikel .art-row").find(r => { const [n, , , p] = r.querySelectorAll("input, select"); return n.value.trim() && !(zahl(p.value) > 0); });
+    if (ohne) { toast("Bei einem Artikel fehlt der Preis – bitte ergänzen oder die Zeile entfernen."); ohne.scrollIntoView({ block: "center" }); ohne.querySelectorAll("input")[2].focus(); return; }
+  }
+  const ausBon = F.ausBon;
   L.eintraege.push({ pwaId: uid(), typ: F.typ, datum: $("#f-datum").value || heute(), ort, betrag: rund(betrag), bezahlt: F.wer, teilung: F.teil, notiz: $("#f-notiz").value.trim(), artikel: F.typ === "einkauf" ? artLesen() : [] });
-  if (await sichern("eintraege")) { toast("Gespeichert – wird beim nächsten Abgleich gesendet"); fLeeren(); zeichneEListe(); zeichnePreise(); }
+  if (await sichern("eintraege")) {
+    toast("Gespeichert – wird beim nächsten Abgleich gesendet");
+    if (ausBon) qLeeren();
+    fLeeren(); zeichneEListe(); zeichnePreise();
+  }
 });
 function zeichneEListe() {
   const box = $("#e-liste"); box.replaceChildren();
