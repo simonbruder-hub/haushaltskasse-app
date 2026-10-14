@@ -111,3 +111,24 @@ describe("Abgleich Handy ↔ Server", () => {
     expect((await syncA.sync()).error).toBeUndefined();
   });
 });
+
+describe("Server noch ohne die neueste Migration", () => {
+  test("Abgleich bricht vor dem Senden ab und nennt den Grund", async () => {
+    const alt = await server({ nurM1: true });
+    const h = await handy();
+    const hh = randomUUID(), user = randomUUID();
+    await h.query(`select seed_household($1, 'Altstetten', 'Simon', 'Eliana')`, [hh]);
+    const p = (await h.query<{ id: string }>(`select id from person where display_name = 'Simon' and household_id = $1`, [hh])).rows[0].id;
+    await h.query(`insert into household_member (household_id, user_id, role, person_id) values ($1, $2, 'owner', $3)`, [hh, user, p]);
+    const vorher = await zahl(h, `select count(*) n from _outbox`);
+    const r = await new SyncEngine(h, new PGliteRemote(alt, user)).sync();
+    expect(r.error).toMatch(/SERVER_VERALTET: Server auf Stand 1, App auf Stand 2/);
+    expect(r.pushed).toBe(0);
+    expect(await zahl(alt, `select count(*) n from household`)).toBe(0);
+    expect(await zahl(h, `select count(*) n from _outbox`)).toBe(vorher);
+  });
+
+  test("Server auf aktuellem Stand meldet seine Version", async () => {
+    expect(await new PGliteRemote(await server(), randomUUID()).rpc<number>("app_schema_version", {})).toBe(2);
+  });
+});

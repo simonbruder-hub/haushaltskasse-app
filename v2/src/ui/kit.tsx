@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { Icon, KONTO_ICON } from "./Icon";
 import { back } from "../lib/router";
+import { sichern } from "../db/client";
 
 export function Seite({ eyebrow, titel, text, zurueck, aktion, children }: {
   eyebrow?: string; titel: string; text?: ReactNode; zurueck?: string; aktion?: ReactNode; children?: ReactNode;
@@ -104,12 +105,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 export const useToast = () => useContext(ToastCtx);
 
-/** Führt eine Aktion aus und zeigt Fehler verständlich an. */
+/** Führt eine Aktion aus und zeigt Fehler verständlich an. Die Bestätigung («Gespeichert») erscheint erst, wenn die
+ *  Änderung dauerhaft im Browser-Speicher liegt; die Oberfläche geht derweil schon weiter. */
 export function useAktion() {
   const toast = useToast();
   return useCallback(async (fn: () => Promise<unknown>, erfolg?: string) => {
-    try { await fn(); if (erfolg) toast(erfolg); return true; }
+    try { await fn(); }
     catch (e) { toast(fehlertext(e)); console.error(e); return false; }
+    sichern().then(() => { if (erfolg) toast(erfolg); }, (e) => { toast(fehlertext(e)); console.error(e); });
+    return true;
   }, [toast]);
 }
 export function fehlertext(e: unknown): string {

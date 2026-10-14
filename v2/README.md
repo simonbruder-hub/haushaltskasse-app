@@ -59,6 +59,8 @@ Browser (Handy)                              Supabase (eigenes Projekt)
 - **Abgeleitete Tabellen** (Anteile, Zahlungsanteile, Preisbeobachtungen) werden nicht synchronisiert. Jedes Handy berechnet sie nach dem Abgleich selbst (`sync_after_pull`).
 - **Aktualisierung der Oberfläche** (`src/db/client.ts`): Jede lokale Änderung schreibt in `_outbox`, jeder Abgleich meldet sich. Auf dieses eine Signal laden die Abfragen der Seiten neu. Das ist rund zehnmal schneller als eine Live-Abfrage pro Komponente.
 - **Datenbank-Versionen** (`src/db/migrations.ts`): Beim Start spielt die App fehlende Versionen ein (v1 = M1, v2 = M2). Vorhandene Daten bleiben erhalten.
+- **Sicher speichern** (`src/db/worker.ts`): Abfragen warten nicht auf IndexedDB (sonst wäre jede rund 0,3 s langsamer). Nach jeder Benutzeraktion schreibt die App aber alles fest; erst dann erscheint «Gespeichert». Geht die App in den Hintergrund, schreibt sie ebenfalls.
+- **Server-Stand** (`app_schema_version()`): Vor dem Abgleich prüft die App, ob die Datenbank auf Supabase mindestens ihren Stand hat. Fehlt eine Migration, sendet sie nichts und sagt, welche Datei auszuführen ist.
 
 **Abweichungen vom Blueprint v2** (siehe `docs/BLUEPRINT.md`):
 

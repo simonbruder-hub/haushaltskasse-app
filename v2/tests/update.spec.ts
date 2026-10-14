@@ -56,6 +56,7 @@ test("Update M1 → aktuell: Daten bleiben, Belege und Ausgleich funktionieren",
   await page.getByRole("dialog").getByRole("button", { name: "Erfassen" }).click();
   await expect(page.getByText("Topf «Kind 1»")).toBeVisible();
   await expect(page.getByRole("link", { name: "Mehr", exact: true })).toHaveCount(0);
+  await page.waitForTimeout(2000);   // M1 schreibt nach dem Speichern noch im Hintergrund in IndexedDB
 
   // Aktueller Build unter derselben Adresse: die Datenbank wird beim Start auf den neuen Stand gebracht
   wurzel = aktuell;

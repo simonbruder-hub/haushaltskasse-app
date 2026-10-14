@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { db, refreshAll } from "../db/client";
+import { db, refreshAll, sichern } from "../db/client";
 import { SyncEngine } from "../sync/engine";
 import { SupabaseRemote } from "../sync/remote-supabase";
 import { supabase, verbindung } from "./supabase";
@@ -29,6 +29,19 @@ async function motor(): Promise<SyncEngine | null> {
   return engine;
 }
 
+/** Meldungen des Servers verständlich machen. Typischer Fall nach einem App-Update: die Datenbank auf Supabase
+ *  hat die neuen Spalten noch nicht, weil die neueste Migration noch nicht ausgeführt wurde. */
+export function abgleichFehler(m: string | null | undefined): string | null {
+  if (!m) return null;
+  if (/SERVER_VERALTET/.test(m)) {
+    return "Die App ist neuer als die Datenbank auf Supabase. Bitte in Supabase im SQL-Editor die neueste Datei aus «v2/supabase/migrations» ausführen (siehe Anleitung). Bis dahin bleibt alles auf diesem Handy gespeichert.";
+  }
+  if (/schema cache|does not exist|PGRST20[45]|42703|42P01/i.test(m)) {
+    return `Der Server ist noch nicht auf dem neuesten Stand: In Supabase im SQL-Editor die neueste Datei aus «v2/supabase/migrations» ausführen (siehe Anleitung). Meldung: ${m.slice(0, 120)}`;
+  }
+  return m;
+}
+
 /** Beim Start und nach Änderungen an der Verbindung aufrufen. */
 export async function syncPruefen() {
   const c = supabase();
@@ -39,7 +52,7 @@ export async function syncPruefen() {
   const { data } = await c.auth.getSession();
   const user = data.session?.user;
   if (!user) { setze({ modus: "abgemeldet", email: undefined, userId: undefined, ausstehend }); return; }
-  setze({ modus: "bereit", email: user.email ?? undefined, userId: user.id, ausstehend, letzter: await state("last_sync"), fehler: (await state("last_error")) || null });
+  setze({ modus: "bereit", email: user.email ?? undefined, userId: user.id, ausstehend, letzter: await state("last_sync"), fehler: abgleichFehler(await state("last_error")) });
 }
 
 let aktuell: Promise<boolean> | null = null;
@@ -57,10 +70,10 @@ export function jetztAbgleichen(): Promise<boolean> {
       const r = await m.sync();
       if (localStorage.getItem("haushalt-debug")) console.info("Abgleich", JSON.stringify(r));
       if (r.pulled || r.deleted) await refreshAll();
-      setze({ modus: r.error ? "fehler" : "bereit", fehler: r.error ?? null, letzter: await state("last_sync"), ausstehend: await m.pending() });
+      setze({ modus: r.error ? "fehler" : "bereit", fehler: abgleichFehler(r.error), letzter: await state("last_sync"), ausstehend: await m.pending() });
       return !r.error;
     } catch (e) {
-      setze({ modus: "fehler", fehler: e instanceof Error ? e.message : String(e) });
+      setze({ modus: "fehler", fehler: abgleichFehler(e instanceof Error ? e.message : String(e)) });
       return false;
     }
   })().finally(() => { aktuell = null; });
@@ -131,6 +144,7 @@ export async function ichBin(personId: string) {
     const d = await db();
     await d.query(`update household_member set person_id = $1 where household_id = $2 and user_id = $3 and person_id is distinct from $1`, [personId, household, uid]);
   }
+  await sichern();
 }
 
 /** Beitritt mit Einladungscode auf einem neuen Gerät: Haushalt vom Server holen. */

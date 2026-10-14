@@ -22,6 +22,7 @@ export class SyncEngine {
   private tables: SyncTable[] = [];
   private columns = new Map<string, string[]>();
   private running: Promise<SyncResult> | null = null;
+  private serverGeprueft = false;
 
   constructor(private db: Db, private remote: Remote) {}
 
@@ -51,6 +52,7 @@ export class SyncEngine {
     await this.init();
     const result: SyncResult = { pushed: 0, pulled: 0, deleted: 0 };
     try {
+      await this.pruefeServer();
       result.pushed = await this.push();
       const p = await this.pull();
       result.pulled = p.pulled;
@@ -62,6 +64,20 @@ export class SyncEngine {
       await this.setState("last_error", result.error);
     }
     return result;
+  }
+
+  /** Der Server muss mindestens den Datenbank-Stand dieses Handys haben, sonst fehlen dort neue Spalten. */
+  private async pruefeServer() {
+    if (this.serverGeprueft) return;
+    const lokal = (await this.db.query<{ v: number }>(`select coalesce(max(version), 0)::int as v from _schema_version`)).rows[0].v;
+    let server = 1;   // M1 kannte die Funktion noch nicht
+    try {
+      server = Number(await this.remote.rpc<number>("app_schema_version", {}));
+    } catch (e) {
+      if (!/app_schema_version/i.test(e instanceof Error ? e.message : String(e))) throw e;   // z. B. kein Netz
+    }
+    if (server < lokal) throw new Error(`SERVER_VERALTET: Server auf Stand ${server}, App auf Stand ${lokal}`);
+    this.serverGeprueft = true;
   }
 
   // ---------- Push ----------

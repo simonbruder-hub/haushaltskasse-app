@@ -31,6 +31,10 @@ test("M2: Belege erfassen, aufteilen, Gutschrift, bearbeiten, ausgleichen", asyn
   await speichern(page);
   await expect(page.getByRole("heading", { name: "Ausgaben" })).toBeVisible();
   await expect(page.getByRole("link", { name: /Migros/ })).toContainText("86.40");
+  // «Gespeichert» heisst dauerhaft gespeichert: danach sofort neu laden (wie App wegwischen), der Beleg ist noch da
+  await expect(page.getByRole("status")).toHaveText("Gespeichert");
+  await page.reload();
+  await expect(page.getByRole("link", { name: /Migros/ })).toContainText("86.40", { timeout: 20_000 });
 
   // 2) Coop mit Positionen: Shampoo für Simon (mit Rabatt), Rest gemeinsam, 5.– Superpunkte, bezahlt von Eliana
   await erfassen(page);

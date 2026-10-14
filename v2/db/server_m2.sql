@@ -56,3 +56,9 @@ begin
   end;
   return null;
 end $$;
+
+-- ---------- Stand der Server-Datenbank ----------
+-- Die App gleicht erst ab, wenn der Server mindestens ihren Stand hat; sonst fehlten auf dem Server neue Spalten
+-- und ein Teil der Daten käme an, der Rest nicht. Jede spätere Server-Migration ersetzt die Funktion mit ihrer Nummer.
+create or replace function app_schema_version() returns int language sql stable as $$ select 2 $$;
+grant execute on function app_schema_version() to authenticated;

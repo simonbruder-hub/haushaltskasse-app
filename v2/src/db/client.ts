@@ -6,15 +6,31 @@ import type { Db } from "./types";
 type LiveDb = PGliteWorker & PGliteWithLive;
 let instance: Promise<LiveDb> | null = null;
 
+let dbWorker: Worker | null = null;
+
 export function openDb(): Promise<LiveDb> {
   if (!instance) {
-    instance = PGliteWorker.create(new Worker(new URL("./worker.ts", import.meta.url), { type: "module" }), {
-      extensions: { live },
-    }) as Promise<LiveDb>;
+    dbWorker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
+    instance = PGliteWorker.create(dbWorker, { extensions: { live } }) as Promise<LiveDb>;
   }
   return instance;
 }
 export const db = async (): Promise<Db> => (await openDb()) as unknown as Db;
+
+/** Wartet, bis alle Änderungen dauerhaft im Browser-Speicher liegen (siehe worker.ts). Nach jeder Benutzeraktion. */
+export async function sichern(): Promise<void> {
+  await openDb();
+  const w = dbWorker;
+  if (!w) return;
+  const id = Math.random().toString(36).slice(2);
+  await new Promise<void>((fertig) => {
+    const ende = () => { w.removeEventListener("message", on); clearTimeout(t); fertig(); };
+    const on = (e: MessageEvent) => { if (e.data?.type === "haushalt-gesichert" && e.data.id === id) ende(); };
+    const t = setTimeout(ende, 10_000);   // nie hängen bleiben
+    w.addEventListener("message", on);
+    w.postMessage({ type: "haushalt-sichern", id });
+  });
+}
 
 // ---------- Datenstand ----------
 // Jede lokale Änderung an einer synchronisierten Tabelle schreibt in _outbox (mit neuer seq); nach jedem Abgleich ruft

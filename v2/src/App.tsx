@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLiveQuery, useQuery } from "./db/client";
+import { sichern, useLiveQuery, useQuery } from "./db/client";
 import { KONTEN_SQL, type Konto, type Person } from "./lib/data";
 import { HaushaltCtx } from "./lib/haushalt";
 import { useRoute } from "./lib/router";
@@ -113,7 +113,8 @@ function SyncAgent() {
   useEffect(() => {
     syncPruefen().then(() => jetztAbgleichen());
     const los = () => { jetztAbgleichen(); };
-    const sichtbar = () => { if (document.visibilityState === "visible") los(); };
+    // Geht die App in den Hintergrund, alles Ausstehende sofort in den Browser-Speicher schreiben
+    const sichtbar = () => { if (document.visibilityState === "visible") los(); else sichern().catch(() => undefined); };
     addEventListener("online", los);
     document.addEventListener("visibilitychange", sichtbar);
     const t = setInterval(los, 5 * 60 * 1000);
