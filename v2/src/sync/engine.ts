@@ -113,6 +113,8 @@ export class SyncEngine {
   // ---------- Pull ----------
   private async pull(): Promise<{ pulled: number; deleted: number }> {
     let pulled = 0;
+    const changed: Record<string, string[]> = {};
+    const merke = (table: string, ids: string[]) => { if (ids.length) (changed[table] ??= []).push(...ids); };
     for (const t of this.tables) {
       const cursorRaw = await this.getState(`cursor:${t.name}`);
       let after: { ts: string; id: string } | null = cursorRaw
@@ -122,7 +124,9 @@ export class SyncEngine {
       for (;;) {
         const rows = await this.remote.pull(t.name, t.pk, after, BATCH);
         if (!rows.length) break;
-        pulled += await this.apply(t, rows);
+        const ids = await this.apply(t, rows);
+        pulled += ids.length;
+        merke(t.name, ids);
         const last = rows[rows.length - 1];
         after = { ts: String(last.updated_at), id: String(last[t.pk]) };
         if (!newest || Date.parse(after.ts) > Date.parse(newest)) newest = after.ts;
@@ -146,6 +150,7 @@ export class SyncEngine {
           if (pending.rows.length) continue;
           const r = await tx.query(`delete from ${ident(t.name)} where ${ident(t.pk)} = $1 returning 1`, [s.row_id]);
           n += r.rows.length;
+          if (r.rows.length) merke(t.name, [s.row_id]);
         }
         return n;
       });
@@ -153,10 +158,24 @@ export class SyncEngine {
       await this.setState("cursor:tombstone", String(afterId));
       if (stones.length < BATCH) break;
     }
+    // Abgeleitete Daten (Anteile, Preise) der betroffenen Belege lokal neu rechnen
+    if (Object.keys(changed).length && (await this.hatNachbearbeitung())) {
+      await this.db.query(`select sync_after_pull($1::jsonb)`, [JSON.stringify(changed)]);
+    }
     return { pulled, deleted };
   }
 
-  private async apply(t: SyncTable, rows: Row[]): Promise<number> {
+  private nachbearbeitung: boolean | null = null;
+  private async hatNachbearbeitung(): Promise<boolean> {
+    if (this.nachbearbeitung === null) {
+      const { rows } = await this.db.query<{ f: string | null }>(`select to_regprocedure('sync_after_pull(jsonb)')::text as f`);
+      this.nachbearbeitung = !!rows[0]?.f;
+    }
+    return this.nachbearbeitung;
+  }
+
+  /** Übernimmt Serverzeilen; liefert die IDs der Zeilen, die sich lokal wirklich geändert haben. */
+  private async apply(t: SyncTable, rows: Row[]): Promise<string[]> {
     const cols = this.columns.get(t.name)!;
     const list = cols.map(ident).join(", ");
     const rest = cols.filter((c) => c !== t.pk);
@@ -170,8 +189,8 @@ export class SyncEngine {
          select ${list} from jsonb_populate_recordset(null::${ident(t.name)}, $1::jsonb) x
           where not exists (select 1 from _outbox o where o.table_name = $2 and o.row_id = x.${ident(t.pk)})
          on conflict (${ident(t.pk)}) do update set ${updates} where ${anders}
-         returning 1`, [JSON.stringify(clean), t.name]);
-      return res.length;
+         returning ${ident(t.pk)}::text as id`, [JSON.stringify(clean), t.name]);
+      return (res as { id: string }[]).map((r) => r.id);
     });
   }
 

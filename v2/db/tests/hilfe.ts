@@ -19,6 +19,9 @@ export async function server(): Promise<Db> {
     grant all on all tables in schema public to authenticated;
     grant all on all sequences in schema public to authenticated;`);
   await db.exec(lies("server.sql"));
+  // Spätere Module in derselben Reihenfolge wie die Supabase-Migrationen
+  await db.exec(lies("m2.sql"));
+  await db.exec(lies("server_m2.sql"));
   await db.exec(`grant all on all tables in schema public to authenticated;
     grant all on all sequences in schema public to authenticated;`);
   return db as unknown as Db;

@@ -5,7 +5,7 @@
  */
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createHmac } from "node:crypto";
-import { existsSync, mkdirSync, rmSync, writeFileSync, chmodSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync, chmodSync } from "node:fs";
 import http from "node:http";
 
 export const PG_BIN = process.env.PG_BIN ?? "/usr/lib/postgresql/16/bin";
@@ -30,7 +30,8 @@ export function jwt(sub: string | null, role = "authenticated"): string {
 }
 export const URL_SUPABASE = `http://localhost:${PROXY_PORT}`;
 
-export async function starten(migrationsDatei: string) {
+/** Startet den Nachbau und spielt alle Migrationen aus dem Ordner (sortiert) ein – wie «supabase db push». */
+export async function starten(migrationsOrdner: string) {
   stoppen();
   rmSync(DIR, { recursive: true, force: true });
   mkdirSync(DIR, { recursive: true });
@@ -49,11 +50,13 @@ export async function starten(migrationsDatei: string) {
     alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
     alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
     alter default privileges in schema public grant all on functions to anon, authenticated, service_role;`);
-  chmodSync(migrationsDatei, 0o644);
-  const kopie = `${DIR}/migration.sql`;
-  execFileSync("cp", [migrationsDatei, kopie]);
-  execFileSync("chown", ["postgres:postgres", kopie]);
-  psqlDatei("haushalt", kopie);
+  for (const name of readdirSync(migrationsOrdner).filter((f) => f.endsWith(".sql")).sort()) {
+    const kopie = `${DIR}/${name}`;
+    execFileSync("cp", [`${migrationsOrdner}/${name}`, kopie]);
+    chmodSync(kopie, 0o644);
+    execFileSync("chown", ["postgres:postgres", kopie]);
+    psqlDatei("haushalt", kopie);
+  }
 
   writeFileSync(`${DIR}/postgrest.conf`, [
     `db-uri = "postgres://authenticator:geheim@localhost:${PG_PORT}/haushalt"`, `db-schemas = "public"`, `db-anon-role = "anon"`,

@@ -6,6 +6,7 @@ import { SyncEngine } from "../../src/sync/engine";
 import { SupabaseRemote } from "../../src/sync/remote-supabase";
 import type { Db } from "../../src/db/types";
 import { abbild, handy } from "./hilfe";
+import { belegLaden, belegSpeichern } from "../../src/lib/belege";
 import { jwt, sql, starten, stoppen, URL_SUPABASE, verfuegbar } from "./supabase-nachbau";
 
 const SIMON = randomUUID(), ELIANA = randomUUID(), FREMD = randomUUID();
@@ -17,7 +18,7 @@ const client = (sub: string) => createClient(URL_SUPABASE, jwt(null, "anon"), {
 describe.runIf(verfuegbar())("Nachbau Supabase: PostgreSQL 16 + PostgREST + supabase-js", () => {
   let a: Db, b: Db, syncA: SyncEngine, syncB: SyncEngine;
   beforeAll(async () => {
-    await starten(fileURLToPath(new URL("../../supabase/migrations/20261014000000_m1_fundament.sql", import.meta.url)));
+    await starten(fileURLToPath(new URL("../../supabase/migrations", import.meta.url)));
     a = await handy(); b = await handy();
   }, 120_000);
   afterAll(() => stoppen());
@@ -81,5 +82,30 @@ describe.runIf(verfuegbar())("Nachbau Supabase: PostgreSQL 16 + PostgREST + supa
     expect((await syncA.sync()).error).toBeUndefined();
     expect((await syncB.sync()).error).toBeUndefined();
     expect(Number((await b.query<{ n: number }>(`select count(*)::int n from category`)).rows[0].n)).toBe(36 + 230);
+  });
+
+  test("M2: Belege über PostgREST – Server-Trigger blockieren nicht, Saldo gleich", async () => {
+    const q = async (db: Db, sql: string) => (await db.query<{ id: string }>(sql)).rows[0].id;
+    const leben = await q(a, `select id from account where name = 'Gemeinsam Leben'`), sp = await q(a, `select id from account where name = 'Simon Privat'`);
+    const ep = await q(a, `select id from account where name = 'Eliana Privat'`), simon = await q(a, `select id from person where sort = 1`);
+    const id = await belegSpeichern(a, { household: H, art: "purchase", datum: "2026-10-14", laden: "00000000-0000-4000-8000-000000000001", total: 37.18,
+      topf: leben, kaeufer: simon, kategorie: null,
+      positionen: [{ text: "Kaffee", betrag: 9, rabatt: 3.9, kategorie: null, topf: null }, { text: "Creme", betrag: 15.8, kategorie: null, topf: ep }],
+      zahlungen: [{ art: "loyalty_points", betrag: 5, konto: null }, { art: "debit_card", betrag: 32.18, konto: sp }] });
+    expect((await syncA.sync()).error).toBeUndefined();
+    expect((await syncB.sync()).error).toBeUndefined();
+    const saldo = async (db: Db) => (await db.query<{ n: string; b: string }>(`select display_name n, balance::text b from v_settlement_balance where household_id = $1 order by 1`, [H])).rows.map((r) => [r.n, Number(r.b)]);
+    expect(await saldo(b)).toEqual(await saldo(a));
+    expect(sql(`copy (select count(*) from line_item where transaction_id = '${id}') to stdout`).trim()).toBe("3");
+    expect(sql(`copy (select item_discount from line_item where raw_text = 'Kaffee') to stdout`).trim()).toBe("3.90");
+    // Eliana ändert den Beleg (Status wechselt auf dem Server needs_review → confirmed mit neuen Positionen)
+    const beleg = (await belegLaden(b, id))!;
+    beleg.positionen[1].topf = null;
+    await belegSpeichern(b, beleg);
+    expect((await syncB.sync()).error).toBeUndefined();
+    expect((await syncA.sync()).error).toBeUndefined();
+    expect(await saldo(a)).toEqual(await saldo(b));
+    expect(await syncA.pending()).toBe(0);
+    expect((await syncB.sync()).pushed).toBe(0);
   });
 });

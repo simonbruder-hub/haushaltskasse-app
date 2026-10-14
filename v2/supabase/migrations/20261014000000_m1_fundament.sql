@@ -1,5 +1,5 @@
 -- Haushalt · Supabase-Migration M1 (Fundament)
--- Erzeugt aus db/schema.sql, db/stammdaten.sql und db/server.sql – nicht von Hand ändern.
+-- Erzeugt aus db/schema.sql, db/stammdaten.sql, db/server.sql – nicht von Hand ändern.
 -- Einspielen: Supabase → SQL Editor → diesen Inhalt einfügen → Run (oder: supabase db push)
 
 

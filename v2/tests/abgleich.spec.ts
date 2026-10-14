@@ -6,7 +6,7 @@ import { jwt, starten, stoppen, URL_SUPABASE, verfuegbar } from "../db/tests/sup
 // Zwei Handys (getrennte Browser-Profile) gleichen über den Supabase-Nachbau ab: echter PostgreSQL + PostgREST.
 // Anmeldung per E-Mail-Code ersetzt hier eine vorbereitete Sitzung (GoTrue gibt es im Nachbau nicht).
 test.skip(!verfuegbar(), "PostgreSQL oder PostgREST fehlt");
-test.beforeAll(async () => { await starten(fileURLToPath(new URL("../supabase/migrations/20261014000000_m1_fundament.sql", import.meta.url))); });
+test.beforeAll(async () => { await starten(fileURLToPath(new URL("../supabase/migrations", import.meta.url))); });
 test.afterAll(() => stoppen());
 
 async function handy(browser: Browser, email: string) {
