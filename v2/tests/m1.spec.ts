@@ -1,4 +1,10 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+// Konten, Kategorien, Personen und Einstellungen liegen seit M2 unter «Mehr»
+const mehr = async (page: Page, eintrag: RegExp) => {
+  await page.getByRole("link", { name: "Mehr", exact: true }).click();
+  await page.getByRole("link", { name: eintrag }).click();
+};
 
 test("M1: einrichten, Konten, Kategorien, Kind, Neustart, offline", async ({ page, context }) => {
   const fehler: string[] = [];
@@ -17,7 +23,7 @@ test("M1: einrichten, Konten, Kategorien, Kind, Neustart, offline", async ({ pag
   await page.screenshot({ path: "tests/bilder/3-uebersicht.png", fullPage: true });
 
   // Gemeinsam Leben als echtes Konto führen, Karte erfassen
-  await page.getByRole("link", { name: "Konten", exact: true }).click();
+  await mehr(page, /^Konten und Töpfe/);
   await expect(page.getByRole("heading", { name: "Wo das Geld liegt" })).toBeVisible();
   await page.screenshot({ path: "tests/bilder/4-konten.png", fullPage: true });
   await page.getByRole("link", { name: /Gemeinsam Leben/ }).click();
@@ -36,7 +42,7 @@ test("M1: einrichten, Konten, Kategorien, Kind, Neustart, offline", async ({ pag
   await page.screenshot({ path: "tests/bilder/5-konto.png", fullPage: true });
 
   // Kategorie «Velo» in den gemeinsamen Topf
-  await page.getByRole("link", { name: "Kategorien" }).click();
+  await mehr(page, /^Kategorien/);
   await page.getByRole("button", { name: /^Velo/ }).click();
   await page.getByRole("dialog").getByRole("button", { name: /Gemeinsam Leben/ }).click();
   await page.getByRole("button", { name: "Speichern" }).click();
@@ -44,7 +50,7 @@ test("M1: einrichten, Konten, Kategorien, Kind, Neustart, offline", async ({ pag
   await page.screenshot({ path: "tests/bilder/6-kategorien.png" });
 
   // Kind mit eigenem Topf
-  await page.getByRole("link", { name: "Personen" }).click();
+  await mehr(page, /^Personen/);
   await page.getByRole("button", { name: "Kind", exact: true }).click();
   await page.getByLabel("Name").fill("Kind 1");
   await page.getByRole("dialog").getByRole("button", { name: "Erfassen" }).click();
@@ -54,11 +60,11 @@ test("M1: einrichten, Konten, Kategorien, Kind, Neustart, offline", async ({ pag
   // Neu laden: alles noch da
   await page.reload();
   await expect(page.getByText("Topf «Kind 1»")).toBeVisible({ timeout: 20_000 });
-  await page.getByRole("link", { name: "Übersicht" }).click();
+  await page.getByRole("link", { name: "Übersicht", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Kinder" })).toBeVisible();
 
   // Einstellungen
-  await page.getByRole("link", { name: "Einstellungen" }).click();
+  await mehr(page, /^Einstellungen/);
   await expect(page.getByText("Nur auf diesem Handy").first()).toBeVisible();
   await page.screenshot({ path: "tests/bilder/8-einstellungen.png", fullPage: true });
 

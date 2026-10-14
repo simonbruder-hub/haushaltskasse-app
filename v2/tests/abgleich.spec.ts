@@ -85,5 +85,43 @@ test("Zwei Handys: einrichten, einladen, beitreten, Änderungen hin und her", as
   await eliana.page.goto("./#/konten");
   await expect(eliana.page.getByRole("link", { name: /Kind 1/ })).toBeVisible({ timeout: 10_000 });
 
+  // M2: Simon erfasst einen Einkauf, den er bezahlt hat → Eliana sieht den Beleg und denselben Saldo
+  await simon.page.goto("./#/erfassen");
+  await simon.page.getByLabel("Betrag", { exact: true }).fill("86.40");
+  await simon.page.getByRole("group", { name: "Wo", exact: true }).getByRole("button", { name: "Migros" }).click();
+  await simon.page.getByRole("group", { name: "Was", exact: true }).getByRole("button", { name: "Lebensmittel" }).click();
+  await simon.page.getByRole("button", { name: /^Speichern/ }).click();
+  await expect(simon.page.getByRole("heading", { name: "Ausgaben" })).toBeVisible();
+  await abgleichen(simon.page);
+  await abgleichen(eliana.page);
+  await eliana.page.goto("./#/ausgleich");
+  await expect(eliana.page.getByTestId("saldo-text")).toHaveText("Eliana schuldet Simon", { timeout: 10_000 });
+  await expect(eliana.page.getByTestId("saldo-betrag")).toHaveText("CHF 43.20");
+
+  // Eliana bucht den Ausgleich → Simon sieht «quitt»
+  await eliana.page.getByRole("button", { name: "Ausgleich erfassen" }).click();
+  await eliana.page.getByRole("button", { name: "Ausgleich buchen" }).click();
+  await expect(eliana.page.getByTestId("saldo-text")).toHaveText("Ihr seid quitt");
+  await abgleichen(eliana.page);
+  await abgleichen(simon.page);
+  await simon.page.goto("./#/ausgleich");
+  await expect(simon.page.getByTestId("saldo-text")).toHaveText("Ihr seid quitt", { timeout: 10_000 });
+
+  // Eliana korrigiert den Betrag → Simon sieht den neuen Saldo (Anteile rechnet jedes Handy nach dem Abgleich selbst)
+  await eliana.page.goto("./#/belege");
+  await eliana.page.getByRole("link", { name: /Migros/ }).click();
+  await eliana.page.getByRole("link", { name: "Bearbeiten" }).click();
+  await expect(eliana.page.getByLabel("Betrag", { exact: true })).toHaveValue("86.4");
+  await eliana.page.getByLabel("Betrag", { exact: true }).fill("90");
+  await eliana.page.getByRole("button", { name: /^Änderung speichern/ }).click();
+  await expect(eliana.page.getByRole("link", { name: "Bearbeiten" })).toBeVisible();
+  await abgleichen(eliana.page);
+  await abgleichen(simon.page);
+  await simon.page.goto("./#/ausgleich");
+  await expect(simon.page.getByTestId("saldo-text")).toHaveText("Eliana schuldet Simon", { timeout: 10_000 });
+  await expect(simon.page.getByTestId("saldo-betrag")).toHaveText("CHF 1.80");
+  await simon.page.goto("./#/belege");
+  await expect(simon.page.getByRole("link", { name: /Migros/ })).toContainText("90.00");
+
   expect([...simon.fehler, ...eliana.fehler].filter((f) => !/ErrnoError/.test(f))).toEqual([]);
 });

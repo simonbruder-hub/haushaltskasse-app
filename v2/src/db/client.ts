@@ -16,12 +16,56 @@ export function openDb(): Promise<LiveDb> {
 }
 export const db = async (): Promise<Db> => (await openDb()) as unknown as Db;
 
-// Nach einem Abgleich (Übernahme ohne Trigger) alle Live-Abfragen neu laden
-const active = new Set<() => Promise<void>>();
-export async function refreshAll() { await Promise.all([...active].map((r) => r().catch(() => undefined))); }
+// ---------- Datenstand ----------
+// Jede lokale Änderung an einer synchronisierten Tabelle schreibt in _outbox (mit neuer seq); nach jedem Abgleich ruft
+// sync.ts refreshAll() auf. Auf dieses eine Signal hören alle Abfragen der Seiten und laden neu. Das ist viel schneller als
+// eine Live-Abfrage pro Komponente (jede baut eine temporäre Ansicht und Trigger auf, nacheinander in einer Transaktion).
+let stand = 0;
+const hoerer = new Set<() => void>();
+function geaendert() { stand++; for (const h of [...hoerer]) h(); }
+let signal: Promise<unknown> | null = null;
+function signalStarten() {
+  signal ??= openDb().then((d) => {
+    let erste = true;
+    return d.live.query(`select count(*)::int as n, coalesce(max(seq), 0)::text as s from _outbox`, [], () => {
+      if (erste) { erste = false; return; }
+      geaendert();
+    });
+  }).catch((e) => { console.error(e); signal = null; });
+}
 
-/** Live-Abfrage: aktualisiert sich selbst, sobald sich die Daten ändern. null = lädt noch. */
+// Live-Abfragen (nur für den Gerätezustand) und Datenstand nach einem Abgleich neu laden
+const active = new Set<() => Promise<void>>();
+export async function refreshAll() {
+  geaendert();
+  await Promise.all([...active].map((r) => r().catch(() => undefined)));
+}
+
+/** Abfrage für Seiten: lädt neu, sobald sich irgendwo Daten ändern (lokal oder durch den Abgleich). null = lädt noch. */
 export function useQuery<T>(sql: string, params: unknown[] = []): T[] | null {
+  const [rows, setRows] = useState<T[] | null>(null);
+  const [n, setN] = useState(stand);
+  const key = sql + "\u0000" + JSON.stringify(params);
+  useEffect(() => {
+    signalStarten();
+    const h = () => setN(stand);
+    hoerer.add(h);
+    h();
+    return () => { hoerer.delete(h); };
+  }, []);
+  useEffect(() => {
+    let alive = true;
+    openDb().then((d) => d.query<T>(sql, params.map((p) => (p === undefined ? null : p))))
+      .then((r) => { if (alive) setRows(r.rows); })
+      .catch((e) => { console.error(e); if (alive) setRows([]); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, n]);
+  return rows;
+}
+
+/** Echte Live-Abfrage der PGlite-Erweiterung: nur für Tabellen ohne Outbox (_sync_state, _outbox). */
+export function useLiveQuery<T>(sql: string, params: unknown[] = []): T[] | null {
   const [rows, setRows] = useState<T[] | null>(null);
   const key = sql + "\u0000" + JSON.stringify(params);
   const keyRef = useRef(key);

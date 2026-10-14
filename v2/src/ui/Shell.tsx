@@ -3,7 +3,9 @@ import { Icon } from "./Icon";
 import { useHaushalt } from "../lib/haushalt";
 import { useSync } from "../lib/sync";
 
-const TABS: [string, string, string][] = [["", "Übersicht", "uebersicht"], ["konten", "Konten", "konten"], ["kategorien", "Kategorien", "kategorien"], ["personen", "Personen", "personen"]];
+const TABS: [string, string, string][] = [["", "Übersicht", "uebersicht"], ["belege", "Belege", "beleg"], ["erfassen", "Erfassen", "plus"], ["ausgleich", "Ausgleich", "ausgleich"], ["mehr", "Mehr", "mehr"]];
+const UNTER_MEHR = ["mehr", "konten", "kategorien", "personen", "einstellungen"];
+const tabVon = (seite: string) => (UNTER_MEHR.includes(seite) ? "mehr" : seite);
 
 export function Shell({ seite, children }: { seite: string; children: ReactNode }) {
   const { name } = useHaushalt();
@@ -17,17 +19,16 @@ export function Shell({ seite, children }: { seite: string; children: ReactNode 
             <p className="text-muted text-[12.5px] truncate">{name}</p>
           </div>
         </a>
-        <div className="flex items-center gap-1">
-          <SyncChip />
-          <a href="#/einstellungen" className="icon-btn" aria-label="Einstellungen" aria-current={seite === "einstellungen" ? "page" : undefined}>
-            <Icon name="einstellungen" size={22} />
-          </a>
-        </div>
+        <SyncChip />
       </header>
       <main className="grid gap-5">{children}</main>
       <nav className="tabs" aria-label="Hauptnavigation">
-        {TABS.map(([pfad, text, icon]) => (
-          <a key={pfad} href={`#/${pfad}`} aria-current={seite === pfad ? "page" : undefined}>
+        {TABS.map(([pfad, text, icon]) => pfad === "erfassen" ? (
+          <a key={pfad} href="#/erfassen" className="fab" aria-label={text} aria-current={seite === pfad ? "page" : undefined}>
+            <Icon name={icon} size={28} strokeWidth={2.4} />
+          </a>
+        ) : (
+          <a key={pfad} href={`#/${pfad}`} aria-current={tabVon(seite) === pfad ? "page" : undefined}>
             <Icon name={icon} size={23} /><span>{text}</span>
           </a>
         ))}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "./db/client";
+import { useLiveQuery, useQuery } from "./db/client";
 import { KONTEN_SQL, type Konto, type Person } from "./lib/data";
 import { HaushaltCtx } from "./lib/haushalt";
 import { useRoute } from "./lib/router";
@@ -13,16 +13,42 @@ import { KontoDetail } from "./pages/KontoDetail";
 import { Kategorien } from "./pages/Kategorien";
 import { Personen } from "./pages/Personen";
 import { Einstellungen } from "./pages/Einstellungen";
+import { Erfassen } from "./pages/Erfassen";
+import { Belege } from "./pages/Belege";
+import { BelegDetail } from "./pages/BelegDetail";
+import { Ausgleich } from "./pages/Ausgleich";
+import { Mehr } from "./pages/Mehr";
 
 export function App() {
-  const st = useQuery<{ key: string; value: string }>(`select key, value from _sync_state where key in ('household_id', 'person_id')`);
+  const st = useLiveQuery<{ key: string; value: string }>(`select key, value from _sync_state where key in ('household_id', 'person_id')`);
   const household = st?.find((r) => r.key === "household_id")?.value ?? null;
   const ich = st?.find((r) => r.key === "person_id")?.value ?? null;
   return (
     <ToastProvider>
       <SyncAgent />
+      <NeueVersion />
       {st === null ? <Laden /> : household ? <MitHaushalt household={household} ich={ich} /> : <Start />}
     </ToastProvider>
+  );
+}
+
+/** Nach einem Update übernimmt der neue Service Worker; die offene Seite läuft noch mit der alten Version.
+ *  Statt ungefragt neu zu laden (eine angefangene Erfassung ginge verloren) bietet die App das Neuladen an. */
+function NeueVersion() {
+  const [neu, setNeu] = useState(false);
+  useEffect(() => {
+    const sw = navigator.serviceWorker;
+    if (!sw?.controller) return;   // erster Start: keine alte Version
+    const on = () => setNeu(true);
+    sw.addEventListener("controllerchange", on);
+    return () => sw.removeEventListener("controllerchange", on);
+  }, []);
+  if (!neu) return null;
+  return (
+    <button className="btn btn-primary fixed z-[55] left-1/2 -translate-x-1/2 top-[calc(12px+env(safe-area-inset-top))] shadow-lg !min-h-0 py-2.5 text-[14px]"
+      onClick={() => location.reload()}>
+      Neue Version bereit · Neu laden
+    </button>
   );
 }
 
@@ -54,6 +80,10 @@ function MitHaushalt({ household, ich }: { household: string; ich: string | null
     case "kategorien": inhalt = <Kategorien />; break;
     case "personen": inhalt = <Personen />; break;
     case "einstellungen": inhalt = <Einstellungen />; break;
+    case "erfassen": inhalt = <Erfassen key={id ?? "neu"} id={id} />; break;
+    case "belege": inhalt = id ? <BelegDetail id={id} /> : <Belege />; break;
+    case "ausgleich": inhalt = <Ausgleich />; break;
+    case "mehr": inhalt = <Mehr />; break;
     default: inhalt = <Uebersicht />;
   }
   return (
@@ -78,7 +108,7 @@ function Warten() {
 
 /** Hält den Abgleich am Laufen: beim Start, wenn das Netz zurückkommt, beim Zurückkehren in die App und nach Änderungen. */
 function SyncAgent() {
-  const outbox = useQuery<{ n: number }>(`select count(*)::int as n from _outbox`);
+  const outbox = useLiveQuery<{ n: number }>(`select count(*)::int as n from _outbox`);
   const n = outbox?.[0]?.n ?? 0;
   useEffect(() => {
     syncPruefen().then(() => jetztAbgleichen());

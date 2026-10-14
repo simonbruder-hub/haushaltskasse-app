@@ -81,7 +81,7 @@ export function farbe(p: { color?: string | null; sort?: number | null }) {
   return p.color || PERSON_FARBEN[((p.sort ?? 1) - 1 + PERSON_FARBEN.length) % PERSON_FARBEN.length];
 }
 export function Avatar({ name, color, size = 30 }: { name: string; color: string; size?: number }) {
-  return <span className="avatar" style={{ background: color, width: size, height: size, fontSize: size * 0.43 }}>{name.slice(0, 1).toUpperCase()}</span>;
+  return <span className="avatar" aria-hidden="true" style={{ background: color, width: size, height: size, fontSize: size * 0.43 }}>{name.slice(0, 1).toUpperCase()}</span>;
 }
 
 export function Leer({ icon, titel, text, children }: { icon: string; titel: string; text?: ReactNode; children?: ReactNode }) {
@@ -119,4 +119,19 @@ export function fehlertext(e: unknown): string {
   if (/check constraint/i.test(m)) return "Ein Wert ist nicht zulässig. Bitte Eingaben prüfen.";
   if (/Failed to fetch|NetworkError/i.test(m)) return "Keine Verbindung. Es wird später erneut versucht.";
   return m.length > 140 ? m.slice(0, 140) + "…" : m;
+}
+
+/** Löschen mit Rückfrage direkt an Ort und Stelle (kein Browser-Dialog) */
+export function LoeschKnopf({ text, frage, onJa }: { text: string; frage: ReactNode; onJa: () => void }) {
+  const [fragen, setFragen] = useState(false);
+  if (!fragen) return <button type="button" className="btn btn-danger" onClick={() => setFragen(true)}><Icon name="muell" />{text}</button>;
+  return (
+    <div className="card-flat p-3.5 grid gap-2.5" role="alertdialog" aria-label={text}>
+      <p className="text-[14px]">{frage}</p>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" className="btn btn-danger" onClick={onJa}>Ja, löschen</button>
+        <button type="button" className="btn" onClick={() => setFragen(false)}>Abbrechen</button>
+      </div>
+    </div>
+  );
 }

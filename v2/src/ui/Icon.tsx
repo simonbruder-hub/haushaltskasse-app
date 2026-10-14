@@ -32,6 +32,13 @@ const PFADE: Record<string, string> = {
   stift: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
   blatt: "M5 19c0-8 5-13 15-14-1 10-6 15-14 15M5 19l7-7",
   waage: "M12 4v16M5 20h14M5 8l-3 6a3 3 0 0 0 6 0zM19 8l-3 6a3 3 0 0 0 6 0zM5 8h14",
+  beleg: "M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21zM9.5 8h5M9.5 12h5M9.5 16h3",
+  ausgleich: "M4 8h15M15 4l4 4-4 4M20 16H5M9 12l-4 4 4 4",
+  mehr: kreis(5, 12, 1.3) + kreis(12, 12, 1.3) + kreis(19, 12, 1.3),
+  suche: kreis(11, 11, 6.5) + "M20 20l-4.3-4.3",
+  laden: "M4 9l1.6-5h12.8L20 9M4 9v11h16V9M4 9h16M9.5 20v-5.5h5V20",
+  kalender: "M4 6h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4",
+  geschenk: "M4 11h16v9H4zM3 7.5h18V11H3zM12 7.5V20M12 7.5c-1.5-3-5-3.6-5-1.5 0 1.2 2 1.5 5 1.5zM12 7.5c1.5-3 5-3.6 5-1.5 0 1.2-2 1.5-5 1.5z",
 };
 
 export type IconName = keyof typeof PFADE;
