@@ -1,0 +1,33 @@
+{
+  "document": { "document_type": "receipt", "language": "de", "legibility": "good", "is_complete": true, "warnings": [] },
+  "merchant": { "name": "Migros Zürich Altstetten", "chain_key": "migros", "branch_name": "MM Altstetten", "street": "Altstetterstrasse 145",
+                "postal_code": "8048", "city": "Zürich", "country": "CH", "vat_number": "CHE-105.829.940 MWST" },
+  "transaction": { "date": "2026-10-03", "time": "17:42", "currency": "CHF", "receipt_number": "0815", "register_id": "12",
+                   "receipt_barcode_text": "0012081520261003174212", "is_refund": false },
+  "line_items": [
+    { "position": 1, "raw_text": "M-CL VOLLMI UHT 1L", "item_type": "product", "quantity": 2, "quantity_unit": "piece", "unit_price": 1.65,
+      "regular_price": 3.30, "item_discount": 0, "discount_label": null, "final_price": 3.30, "is_promo": false,
+      "pack_size_hint": { "value": 1, "unit": "l" }, "multipack_count": null, "vat_code": "A", "ean": null, "confidence": "high" },
+    { "position": 2, "raw_text": "BONCAMPO BOHNEN 500G", "item_type": "product", "quantity": 1, "quantity_unit": "piece", "unit_price": 12.90,
+      "regular_price": 12.90, "item_discount": 3.90, "discount_label": "Aktion 30%", "final_price": 9.00, "is_promo": true,
+      "pack_size_hint": { "value": 500, "unit": "g" }, "multipack_count": null, "vat_code": "A", "ean": null, "confidence": "high" },
+    { "position": 3, "raw_text": "BANANEN", "item_type": "product", "quantity": 0.734, "quantity_unit": "kg", "unit_price": 2.90,
+      "regular_price": 2.13, "item_discount": 0, "discount_label": null, "final_price": 2.13, "is_promo": false,
+      "pack_size_hint": null, "multipack_count": null, "vat_code": "A", "ean": null, "confidence": "high" },
+    { "position": 4, "raw_text": "SHAMPOO REPAIR 250ML", "item_type": "product", "quantity": 1, "quantity_unit": "piece", "unit_price": 6.95,
+      "regular_price": 6.95, "item_discount": 0, "discount_label": null, "final_price": 6.95, "is_promo": false,
+      "pack_size_hint": { "value": 250, "unit": "ml" }, "multipack_count": null, "vat_code": "B", "ean": null, "confidence": "high" },
+    { "position": 5, "raw_text": "GESICHTSCREME 50ML", "item_type": "product", "quantity": 1, "quantity_unit": "piece", "unit_price": 15.80,
+      "regular_price": 15.80, "item_discount": 0, "discount_label": null, "final_price": 15.80, "is_promo": false,
+      "pack_size_hint": { "value": 50, "unit": "ml" }, "multipack_count": null, "vat_code": "B", "ean": null, "confidence": "medium" }
+  ],
+  "basket_discounts": [],
+  "payments": [
+    { "kind": "loyalty_points", "label": "Cumulus-Bon", "amount": 5.00, "card_last4": null },
+    { "kind": "debit_card", "label": "Debit Mastercard", "amount": 32.18, "card_last4": "4711" }
+  ],
+  "loyalty": { "program": "cumulus", "card_masked": "2099 **** 1234", "points_earned": 37, "points_redeemed": null },
+  "totals": { "subtotal": 37.18, "total": 37.18, "rounding": 0,
+              "vat_lines": [ { "code": "A", "rate_pct": 2.6, "net": null, "vat": 0.37, "gross": 14.43 },
+                             { "code": "B", "rate_pct": 8.1, "net": null, "vat": 1.70, "gross": 22.75 } ] }
+}

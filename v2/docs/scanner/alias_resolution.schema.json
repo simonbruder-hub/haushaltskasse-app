@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "alias_resolution.schema.json",
+  "title": "Zuordnung unbekannter Belegzeilen (Kanal 3, optionaler Modell-Aufruf)",
+  "description": "Eingabe: unbekannte Zeilen + Kandidatenliste der MasterProducts des Haushalts. Ausgabe nur als Vorschlag (source llm_suggested); bestätigt wird im Prüf-Dialog.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["resolutions"],
+  "properties": {
+    "resolutions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["position", "decision", "master_product_id", "new_master", "pack_size", "confidence", "reason"],
+        "properties": {
+          "position": { "type": "integer" },
+          "decision": { "type": "string", "enum": ["existing", "new", "not_a_product"] },
+          "master_product_id": { "anyOf": [{ "type": "string", "format": "uuid" }, { "type": "null" }] },
+          "new_master": {
+            "anyOf": [
+              { "type": "object", "additionalProperties": false, "required": ["name", "comparison_unit", "category_hint"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "comparison_unit": { "type": "string", "enum": ["per_100g", "per_1kg", "per_100ml", "per_1l", "per_piece"] },
+                  "category_hint": { "type": "string" } } },
+              { "type": "null" }
+            ]
+          },
+          "pack_size": {
+            "anyOf": [
+              { "type": "object", "additionalProperties": false, "required": ["value", "unit", "multipack_count"],
+                "properties": { "value": { "type": "number" }, "unit": { "type": "string", "enum": ["g", "kg", "ml", "l", "piece"] },
+                                "multipack_count": { "type": "integer" } } },
+              { "type": "null" }
+            ]
+          },
+          "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+          "reason": { "type": "string", "description": "ein kurzer Satz, wird im Prüf-Dialog angezeigt" }
+        }
+      }
+    }
+  }
+}

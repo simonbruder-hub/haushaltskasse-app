@@ -1,6 +1,6 @@
 // Service Worker: hält die App offline verfügbar.
 // Bei jeder neuen Version VERSION erhöhen, dann lädt das Handy die neuen Dateien.
-const VERSION = "v4";
+const VERSION = "v5";
 const CACHE = "kasse-" + VERSION;
 const DATEIEN = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png", "./apple-touch-icon.png",
   "./kern.js", "./liste.js", "./preise.js", "./erfassen.js", "./budget.js", "./abgleich.js", "./produkte.js", "./excel.js", "./bon.js", "./ocr/tesseract.min.js",
@@ -27,7 +27,8 @@ self.addEventListener("activate", ev => {
 self.addEventListener("fetch", ev => {
   const req = ev.request;
   const url = new URL(req.url);
-  if (req.method !== "GET" || url.origin !== self.location.origin) return;
+  // Die neue App unter /neu/ hat ihren eigenen Service Worker – hier nicht abfangen
+  if (req.method !== "GET" || url.origin !== self.location.origin || url.pathname.includes("/neu/") || url.pathname.includes("/v2/")) return;
   // Texterkennung: nur aus dem Speicher, beim ersten Mal aus dem Netz holen und ablegen
   if (url.pathname.includes("/ocr/") && !url.pathname.endsWith("/tesseract.min.js")) {
     ev.respondWith(caches.open(OCR_CACHE).then(async cache => {

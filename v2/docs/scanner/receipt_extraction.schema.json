@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "receipt_extraction.schema.json",
+  "title": "Belegextraktion (Ausgabe des Vision-Modells, Kanal 1)",
+  "description": "Strukturierte Ausgabe für output_config.format. Kompatibel mit Structured Outputs: alle Objekte additionalProperties:false, alle Felder required, fehlende Werte als null, keine Zahlen-/Längen-Constraints.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["document", "merchant", "transaction", "line_items", "basket_discounts", "payments", "loyalty", "totals"],
+  "properties": {
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_type", "language", "legibility", "is_complete", "warnings"],
+      "properties": {
+        "document_type": { "type": "string", "enum": ["receipt", "e_receipt", "refund_receipt", "restaurant_bill", "invoice", "other"] },
+        "language": { "anyOf": [{ "type": "string", "enum": ["de", "fr", "it", "en"] }, { "type": "null" }] },
+        "legibility": { "type": "string", "enum": ["good", "partial", "poor"] },
+        "is_complete": { "type": "boolean", "description": "false, wenn Kopf oder Summe abgeschnitten sind" },
+        "warnings": { "type": "array", "items": { "type": "string" }, "description": "z. B. «Summe weicht um 0.40 ab», «Zeile 7 unleserlich»" }
+      }
+    },
+    "merchant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "chain_key", "branch_name", "street", "postal_code", "city", "country", "vat_number"],
+      "properties": {
+        "name": { "type": "string" },
+        "chain_key": { "type": "string", "enum": ["migros", "coop", "denner", "lidl", "aldi", "volg", "spar", "manor", "globus", "migrolino", "coop_pronto", "avec", "landi", "jumbo", "ikea", "interdiscount", "mediamarkt", "digitec_galaxus", "pharmacy", "restaurant", "other"] },
+        "branch_name": { "$ref": "#/$defs/nstr" },
+        "street": { "$ref": "#/$defs/nstr" },
+        "postal_code": { "$ref": "#/$defs/nstr" },
+        "city": { "$ref": "#/$defs/nstr" },
+        "country": { "anyOf": [{ "type": "string", "enum": ["CH", "LI", "DE", "FR", "IT", "AT"] }, { "type": "null" }] },
+        "vat_number": { "$ref": "#/$defs/nstr" }
+      }
+    },
+    "transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["date", "time", "currency", "receipt_number", "register_id", "receipt_barcode_text", "is_refund"],
+      "properties": {
+        "date": { "anyOf": [{ "type": "string", "format": "date" }, { "type": "null" }] },
+        "time": { "anyOf": [{ "type": "string", "description": "HH:MM" }, { "type": "null" }] },
+        "currency": { "type": "string", "enum": ["CHF", "EUR", "USD"] },
+        "receipt_number": { "$ref": "#/$defs/nstr" },
+        "register_id": { "$ref": "#/$defs/nstr" },
+        "receipt_barcode_text": { "$ref": "#/$defs/nstr" },
+        "is_refund": { "type": "boolean" }
+      }
+    },
+    "line_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["position", "raw_text", "item_type", "quantity", "quantity_unit", "unit_price", "regular_price", "item_discount", "discount_label", "final_price", "is_promo", "pack_size_hint", "multipack_count", "vat_code", "ean", "confidence"],
+        "properties": {
+          "position": { "type": "integer" },
+          "raw_text": { "type": "string", "description": "exakt wie gedruckt" },
+          "item_type": { "type": "string", "enum": ["product", "deposit_or_fee", "refund_or_return"] },
+          "quantity": { "type": "number", "description": "Stückzahl; bei Offenverkauf Gewicht/Volumen" },
+          "quantity_unit": { "type": "string", "enum": ["piece", "kg", "g", "l", "ml"] },
+          "unit_price": { "$ref": "#/$defs/nnum", "description": "Preis pro Stück bzw. pro kg/l, wenn gedruckt" },
+          "regular_price": { "type": "number", "description": "Zeilenbetrag vor Artikelrabatt; negativ bei Retouren/Leergut" },
+          "item_discount": { "type": "number", "description": "Artikelrabatt als positive Zahl, sonst 0" },
+          "discount_label": { "$ref": "#/$defs/nstr" },
+          "final_price": { "type": "number", "description": "regular_price − item_discount" },
+          "is_promo": { "type": "boolean" },
+          "pack_size_hint": {
+            "anyOf": [
+              { "type": "object", "additionalProperties": false, "required": ["value", "unit"],
+                "properties": { "value": { "type": "number" }, "unit": { "type": "string", "enum": ["g", "kg", "ml", "l", "piece"] } } },
+              { "type": "null" }
+            ]
+          },
+          "multipack_count": { "anyOf": [{ "type": "integer" }, { "type": "null" }] },
+          "vat_code": { "$ref": "#/$defs/nstr" },
+          "ean": { "$ref": "#/$defs/nstr" },
+          "confidence": { "type": "string", "enum": ["high", "medium", "low"] }
+        }
+      }
+    },
+    "basket_discounts": {
+      "type": "array",
+      "description": "Echte Preisreduktionen auf den ganzen Einkauf (keine Gutscheine)",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "kind", "amount", "applies_to_positions"],
+        "properties": {
+          "label": { "type": "string" },
+          "kind": { "type": "string", "enum": ["percentage_off_basket", "staff_discount", "basket_coupon", "multi_buy", "other_price_reduction"] },
+          "amount": { "type": "number", "description": "positiv" },
+          "applies_to_positions": { "type": "array", "items": { "type": "integer" }, "description": "leer = alle Positionen" }
+        }
+      }
+    },
+    "payments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "label", "amount", "card_last4"],
+        "properties": {
+          "kind": { "type": "string", "enum": ["cash", "debit_card", "credit_card", "twint", "bank_transfer", "ebill", "voucher", "gift_card", "loyalty_points", "reka", "lunch_check", "other"] },
+          "label": { "type": "string" },
+          "amount": { "type": "number", "description": "netto (Bar: gegeben − Rückgeld); negativ = Rückerstattung" },
+          "card_last4": { "$ref": "#/$defs/nstr" }
+        }
+      }
+    },
+    "loyalty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["program", "card_masked", "points_earned", "points_redeemed"],
+      "properties": {
+        "program": { "type": "string", "enum": ["cumulus", "supercard", "other", "none"] },
+        "card_masked": { "$ref": "#/$defs/nstr" },
+        "points_earned": { "$ref": "#/$defs/nnum" },
+        "points_redeemed": { "$ref": "#/$defs/nnum" }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subtotal", "total", "rounding", "vat_lines"],
+      "properties": {
+        "subtotal": { "$ref": "#/$defs/nnum" },
+        "total": { "type": "number", "description": "Endbetrag vor Gutscheinen/Punkten" },
+        "rounding": { "type": "number", "description": "Rappenrundung, sonst 0" },
+        "vat_lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "rate_pct", "net", "vat", "gross"],
+            "properties": {
+              "code": { "$ref": "#/$defs/nstr" },
+              "rate_pct": { "type": "number" },
+              "net": { "$ref": "#/$defs/nnum" },
+              "vat": { "$ref": "#/$defs/nnum" },
+              "gross": { "$ref": "#/$defs/nnum" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nstr": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+    "nnum": { "anyOf": [{ "type": "number" }, { "type": "null" }] }
+  }
+}

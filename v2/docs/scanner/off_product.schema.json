@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "off_product.schema.json",
+  "title": "EAN-Nachschlag (Kanal 2) · Antwort der Edge Function /ean/{code}",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ean", "valid_checksum", "kind", "status", "source", "product", "local", "price_check"],
+  "properties": {
+    "ean": { "type": "string", "pattern": "^[0-9]{8,14}$" },
+    "valid_checksum": { "type": "boolean" },
+    "kind": { "type": "string", "enum": ["gtin", "in_store_variable", "unknown"], "description": "EAN-13 mit Präfix 20–29 = ladeninterner Gewichts-/Preis-Code: kein OFF-Abruf" },
+    "status": { "type": "string", "enum": ["found_local", "found_off", "not_found", "error"] },
+    "source": { "type": ["string", "null"], "enum": ["local", "off", "obf", "opf", null] },
+    "product": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["name", "brand", "quantity_raw", "unit_size", "unit_type", "pack_count", "image_url", "categories_tags", "nutriscore_grade"],
+      "properties": {
+        "name": { "type": "string" },
+        "brand": { "type": ["string", "null"] },
+        "quantity_raw": { "type": ["string", "null"], "description": "z. B. «6 x 1.5 l»" },
+        "unit_size": { "type": ["number", "null"] },
+        "unit_type": { "type": ["string", "null"], "enum": ["g", "kg", "ml", "l", "piece", null] },
+        "pack_count": { "type": "integer", "minimum": 1 },
+        "image_url": { "type": ["string", "null"] },
+        "categories_tags": { "type": "array", "items": { "type": "string" } },
+        "nutriscore_grade": { "type": ["string", "null"] }
+      }
+    },
+    "local": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["merchant_product_id", "master_product_id", "master_name", "comparison_unit"],
+      "properties": {
+        "merchant_product_id": { "type": "string", "format": "uuid" },
+        "master_product_id": { "type": "string", "format": "uuid" },
+        "master_name": { "type": "string" },
+        "comparison_unit": { "type": "string", "enum": ["per_100g", "per_1kg", "per_100ml", "per_1l", "per_piece"] }
+      }
+    },
+    "price_check": {
+      "type": "array",
+      "description": "Live-Preisvergleich im Laden: letzter bekannter Preis je Händler, nach Preis pro Vergleichseinheit sortiert",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["merchant", "observed_on", "unit_regular_price", "unit_paid_price", "is_promo", "normalized_price_chf", "comparison_unit", "is_cheapest"],
+        "properties": {
+          "merchant": { "type": "string" },
+          "observed_on": { "type": "string", "format": "date" },
+          "unit_regular_price": { "type": "number" },
+          "unit_paid_price": { "type": "number" },
+          "is_promo": { "type": "boolean" },
+          "normalized_price_chf": { "type": "number" },
+          "comparison_unit": { "type": "string" },
+          "is_cheapest": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}
