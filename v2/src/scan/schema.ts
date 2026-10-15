@@ -7,7 +7,8 @@ const ZUSATZ = `
 
 ## Zuordnung
 - product_name: kurzer deutscher Gattungsname des Artikels, ohne Marke, Packungsgrösse und Abkürzungen, z. B. «Vollmilch», «Bananen», «Shampoo», «Kartoffelchips». Bei Depot, Gebühren und Retouren null.
-- category: die passendste Kategorie aus der vorgegebenen Liste, sonst null. Lieber null als eine unpassende Kategorie.`;
+- category: die passendste Kategorie aus der vorgegebenen Liste, sonst null. Lieber null als eine unpassende Kategorie.
+- Nennt der Kontext «Bekannte Produkte» und passt eines davon, übernimm für product_name genau diesen Namen (gleiche Schreibweise). Sonst ein neuer Gattungsname nach der Regel oben.`;
 
 /** Systemprompt: alles nach der Trennlinie (davor steht nur die Beschreibung der Datei) */
 export const SYSTEMPROMPT = promptText.split(/\n---\n/)[1].trim() + ZUSATZ;

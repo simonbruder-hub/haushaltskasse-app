@@ -6,6 +6,7 @@ import { uuid7 } from "../lib/ids";
 import { dateiSpeichern } from "./dateien";
 import type { Abweichung } from "./pruefen";
 import type { Extraktion } from "./typen";
+import { packungAusText, vergleichFuer, type Packung } from "../produkte/menge";
 
 /**
  * Vom Erkennungsergebnis zum Beleg: Laden, Kürzel-Wörterbuch (Kanal 3), Kategorien, Töpfe, Rabatte, Zahlungen.
@@ -22,11 +23,12 @@ export interface ScanZeile {
   rabatt: number; rabattText: string | null;
   korbRabatt: number; korbText: string | null;
   menge: number | null; einheit: Einheit | null; einzelpreis: number | null;
+  packung: Packung | null;     // Packungsgrösse (Wörterbuch › KI › Belegtext); leer bei Offenverkauf und Stückware ohne Angabe
   vergleich: Vergleich;
   kategorie: string | null;
   topf: string | null;         // ausdrücklich gewählt; leer = Standard der Kategorie, sonst persönlich
   status: ZeilenStatus;
-  vorschlag: { produktId: string; produkt: string; kategorie: string | null } | null;
+  vorschlag: { produktId: string; produkt: string; kategorie: string | null; aehnlich: string | null } | null;
   hinweis: string | null;
 }
 export interface ScanZahlung { art: string; betrag: number; konto: string | null; label: string | null; last4: string | null }
@@ -40,7 +42,7 @@ export interface ScanEntwurf {
   zeilen: ScanZeile[];
   abweichungen: string[]; hinweise: string[];
   datei: { blob: Blob; sha: string; mime: string } | null;
-  protokoll: { modell: string | null; requestId: string | null; tokensIn: number | null; tokensOut: number | null; roh: unknown; parsed: unknown } | null;
+  protokoll: { modell: string | null; requestId: string | null; tokensIn: number | null; tokensOut: number | null; kostenUsd?: number | null; roh: unknown; parsed: unknown } | null;
 }
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
@@ -97,8 +99,10 @@ export async function entwurfBauen(d: Queryable, x: {
 
   const roh = e.line_items.map((z) => z.raw_text);
   const kuerzel = laden && roh.length
-    ? (await d.query<{ nr: number; produkt_id: string | null; produkt: string | null; category_id: string | null; sicher: boolean; last_unit_price: string | null }>(
-        `select nr, produkt_id, produkt, category_id, sicher, last_unit_price::text from kuerzel_vorschlaege($1, $2, $3)`, [x.household, laden, roh])).rows
+    ? (await d.query<{ nr: number; produkt_id: string | null; produkt: string | null; category_id: string | null; sicher: boolean; last_unit_price: string | null;
+        aehnlich_wie: string | null; unit_size: string | null; unit_type: Einheit | null; pack_count: number | null }>(
+        `select nr, produkt_id, produkt, category_id, sicher, last_unit_price::text, aehnlich_wie, unit_size::text, unit_type::text, pack_count
+           from kuerzel_vorschlaege($1, $2, $3)`, [x.household, laden, roh])).rows
     : [];
   const fraglich = new Set(x.abweichungen.flatMap((a) => a.zeilen ?? []));
 
@@ -107,7 +111,12 @@ export async function entwurfBauen(d: Queryable, x: {
     const menge = z.quantity_unit !== "piece" || z.quantity !== 1 ? z.quantity : null;
     const einzel = z.unit_price ?? (menge ? null : z.regular_price);
     let status: ZeilenStatus = z.item_type !== "product" ? "sicher" : k ? (k.sicher ? "sicher" : "bekannt") : z.category ? "ki" : "neu";
-    let hinweis: string | null = null;
+    let hinweis: string | null = k?.aehnlich_wie ? `ähnlich wie «${k.aehnlich_wie}»` : null;
+    // Packung: was der Laden-Artikel schon weiss › Angabe der KI › aus dem Belegtext (nur Stückware, nicht Offenverkauf)
+    const packung: Packung | null = z.item_type !== "product" ? null
+      : k?.unit_size && k.unit_type ? { groesse: Number(k.unit_size), einheit: k.unit_type, anzahl: k.pack_count ?? 1 }
+      : z.pack_size_hint && z.pack_size_hint.value > 0 ? { groesse: z.pack_size_hint.value, einheit: z.pack_size_hint.unit, anzahl: Math.max(1, z.multipack_count ?? 1) }
+      : z.quantity_unit === "piece" ? packungAusText(z.raw_text) : null;
     if (k?.last_unit_price && einzel && Math.abs(einzel - Number(k.last_unit_price)) / Number(k.last_unit_price) > 0.5) {
       status = "pruefen"; hinweis = `Preis weicht stark vom letzten Mal ab (${Number(k.last_unit_price).toFixed(2)})`;
     }
@@ -121,9 +130,9 @@ export async function entwurfBauen(d: Queryable, x: {
       betrag: art === "refund" ? r2(Math.abs(z.final_price)) : r2(z.final_price), rabatt: art === "refund" ? 0 : r2(z.item_discount), rabattText: z.discount_label,
       korbRabatt: 0, korbText: null,
       menge, einheit: menge ? z.quantity_unit : null, einzelpreis: z.unit_price,
-      vergleich: vergleichVon(z.pack_size_hint?.unit ?? (menge ? z.quantity_unit : null)),
+      packung, vergleich: packung ? vergleichFuer(packung.einheit) : vergleichVon(menge ? z.quantity_unit : null),
       kategorie: k?.category_id ?? katVonName(z.category), topf: null,
-      status, vorschlag: k ? { produktId: k.produkt_id!, produkt: k.produkt!, kategorie: k.category_id } : null, hinweis,
+      status, vorschlag: k ? { produktId: k.produkt_id!, produkt: k.produkt!, kategorie: k.category_id, aehnlich: k.aehnlich_wie } : null, hinweis,
     };
   });
 
@@ -147,7 +156,7 @@ export async function entwurfBauen(d: Queryable, x: {
     }
     if (e.totals.rounding) {
       zeilen.push({ key: "rundung", raw: "Rundung", name: "Rundung", typ: "deposit_or_fee", betrag: r2(e.totals.rounding), rabatt: 0, rabattText: null,
-        korbRabatt: 0, korbText: null, menge: null, einheit: null, einzelpreis: null, vergleich: "per_piece", kategorie: null, topf: null,
+        korbRabatt: 0, korbText: null, menge: null, einheit: null, einzelpreis: null, packung: null, vergleich: "per_piece", kategorie: null, topf: null,
         status: "sicher", vorschlag: null, hinweis: null });
     }
   }
@@ -241,6 +250,7 @@ export async function entwurfSpeichern(d: Db, e: ScanEntwurf, ctx: {
       text: z.raw, betrag: z.betrag, rabatt: z.rabatt || undefined, rabattText: z.rabattText,
       korbRabatt: z.korbRabatt || undefined, korbText: z.korbText, kategorie: z.kategorie ?? hauptKategorie,
       topf: toepfe[i] === belegTopf ? null : toepfe[i], typ: z.typ, menge: z.menge, einheit: z.einheit, einzelpreis: z.einzelpreis,
+      packung: z.typ === "product" ? z.packung : null,
     })),
     zahlungen, quelle: e.kanal, zeit: e.zeit, belegNr: e.belegNr,
   };
@@ -263,21 +273,27 @@ export async function entwurfSpeichern(d: Db, e: ScanEntwurf, ctx: {
         if (z.typ !== "product" || !z.name.trim()) continue;
         const produkt = (await tx.query<{ id: string }>(`select produkt_sichern($1, $2, $3, $4) as id`,
           [ctx.household, z.name, p.kategorie, z.vergleich])).rows[0].id;
-        const richtig = !!z.vorschlag && z.vorschlag.produktId === produkt && z.vorschlag.kategorie === p.kategorie;
+        // Ein ähnliches Kürzel zählt nie als bestätigt: für diesen Text lernt das Wörterbuch einen neuen Eintrag
+        const richtig = !!z.vorschlag && !z.vorschlag.aehnlich && z.vorschlag.produktId === produkt && z.vorschlag.kategorie === p.kategorie;
         const preis = z.einzelpreis ?? (z.menge ? null : Math.abs(z.betrag + z.rabatt + z.korbRabatt));
+        const pk = z.menge && z.einheit !== "piece" ? null : z.packung;   // Offenverkauf: Menge statt Packung
         p.produkt = produkt;
-        p.kuerzel = (await tx.query<{ id: string }>(`select confirm_alias($1, $2, $3, $4, null, $5, $6) as id`,
-          [ctx.household, beleg.laden, z.raw, produkt, preis, richtig])).rows[0].id;
+        p.packung = pk;
+        p.artikel = (await tx.query<{ id: string | null }>(`select artikel_sichern($1, $2, $3, $4, $5, $6, $7) as id`,
+          [ctx.household, beleg.laden, z.raw, produkt, pk?.groesse ?? null, pk?.einheit ?? null, pk?.anzahl ?? null])).rows[0].id;
+        p.kuerzel = (await tx.query<{ id: string }>(`select confirm_alias($1, $2, $3, $4, $5, $6, $7) as id`,
+          [ctx.household, beleg.laden, z.raw, produkt, p.artikel, preis, richtig])).rows[0].id;
       }
     }
     const id = await belegSchreiben(tx, beleg);
     if (e.protokoll || e.datei) {
       await tx.query(`insert into scan_job (id, household_id, channel, status, attachment_id, input_sha256, model, request_id, raw_output, parsed,
-                        validation_errors, transaction_id, tokens_in, tokens_out, finished_at)
-                      values ($1, $2, $3, 'done', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())`,
+                        validation_errors, transaction_id, tokens_in, tokens_out, cost_usd, finished_at)
+                      values ($1, $2, $3, 'done', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now())`,
         [uuid7(), ctx.household, e.kanal, beleg.anhang ?? null, e.datei?.sha ?? null, e.protokoll?.modell ?? (e.quelle === "ocr" ? "tesseract" : null),
           e.protokoll?.requestId ?? null, e.protokoll?.roh ? JSON.stringify(e.protokoll.roh) : null,
-          e.protokoll?.parsed ? JSON.stringify(e.protokoll.parsed) : null, e.abweichungen, id, e.protokoll?.tokensIn ?? null, e.protokoll?.tokensOut ?? null]);
+          e.protokoll?.parsed ? JSON.stringify(e.protokoll.parsed) : null, e.abweichungen, id, e.protokoll?.tokensIn ?? null, e.protokoll?.tokensOut ?? null,
+          e.protokoll?.kostenUsd ?? null]);
     }
     return id;
   });

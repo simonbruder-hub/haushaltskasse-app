@@ -4,6 +4,8 @@ import { SyncEngine } from "../sync/engine";
 import { SupabaseRemote } from "../sync/remote-supabase";
 import { supabase, verbindung } from "./supabase";
 import { setState, state } from "./data";
+import { abgleichFehler } from "../sync/meldung";
+export { abgleichFehler };
 
 /** Zustand des Abgleichs für die Oberfläche */
 export interface SyncZustand {
@@ -27,19 +29,6 @@ async function motor(): Promise<SyncEngine | null> {
   if (!c) return null;
   if (!engine) engine = new SyncEngine(await db(), new SupabaseRemote(c));
   return engine;
-}
-
-/** Meldungen des Servers verständlich machen. Typischer Fall nach einem App-Update: die Datenbank auf Supabase
- *  hat die neuen Spalten noch nicht, weil die neueste Migration noch nicht ausgeführt wurde. */
-export function abgleichFehler(m: string | null | undefined): string | null {
-  if (!m) return null;
-  if (/SERVER_VERALTET/.test(m)) {
-    return "Die App ist neuer als die Datenbank auf Supabase. Bitte in Supabase im SQL-Editor die neueste Datei aus «v2/supabase/migrations» ausführen (siehe Anleitung). Bis dahin bleibt alles auf diesem Handy gespeichert.";
-  }
-  if (/schema cache|does not exist|PGRST20[45]|42703|42P01/i.test(m)) {
-    return `Der Server ist noch nicht auf dem neuesten Stand: In Supabase im SQL-Editor die neueste Datei aus «v2/supabase/migrations» ausführen (siehe Anleitung). Meldung: ${m.slice(0, 120)}`;
-  }
-  return m;
 }
 
 /** Beim Start und nach Änderungen an der Verbindung aufrufen. */

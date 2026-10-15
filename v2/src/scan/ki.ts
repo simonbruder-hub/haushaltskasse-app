@@ -11,10 +11,26 @@ export const MODELLE: { id: string; name: string; text: string; fallback: boolea
 ];
 export const STANDARD_MODELL = MODELLE[0].id;
 
+/** Listenpreise in USD pro Million Tokens (Stand Oktober 2026). Cache-Schreiben kostet das 1.25-Fache der Eingabe. */
+const PREISE: Record<string, { ein: number; aus: number; cache: number }> = {
+  "claude-opus-5-5": { ein: 4, aus: 20, cache: 0.2 },
+  "claude-sonnet-5-5": { ein: 2, aus: 10, cache: 0.2 },
+  "claude-haiku-5-5": { ein: 0.1, aus: 0.5, cache: 0.01 },
+};
+/** Ungefährer Wechselkurs für die Anzeige in CHF */
+export const USD_CHF = 0.8;
+
+/** Kosten einer Antwort in USD; null, wenn das Modell (z. B. ein Ersatzmodell) keinen hinterlegten Preis hat */
+export function kostenUsd(modell: string, u: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number | null; cache_creation_input_tokens?: number | null }): number | null {
+  const p = PREISE[Object.keys(PREISE).find((k) => modell.startsWith(k)) ?? ""];
+  if (!p) return null;
+  return (u.input_tokens * p.ein + (u.cache_creation_input_tokens ?? 0) * p.ein * 1.25 + (u.cache_read_input_tokens ?? 0) * p.cache + u.output_tokens * p.aus) / 1e6;
+}
+
 export interface Teil { art: "bild" | "pdf"; daten: string }   // daten = base64
 export interface KiErgebnis {
   extraktion: Extraktion; abweichungen: Abweichung[]; modell: string; requestId: string | null;
-  tokensIn: number; tokensOut: number; roh: unknown; reparatur: boolean;
+  tokensIn: number; tokensOut: number; kostenUsd: number | null; roh: unknown; reparatur: boolean;
 }
 
 /** Verständliche Fehler; offline = true heisst: später nochmals versuchen bzw. offline lesen */
@@ -30,6 +46,7 @@ function lesen(res: Anthropic.Beta.Messages.BetaMessage): Extraktion {
 
 export async function kiLesen(o: {
   teile: Teil[]; kategorien: string[]; heute: string; schluessel: string; modell?: string; status?: (t: string) => void;
+  produkte?: string[];   // bekannte Produkte des Haushalts: die KI soll deren Namen wiederverwenden, statt Doppelte anzulegen
 }): Promise<KiErgebnis> {
   const { default: Sdk } = await import("@anthropic-ai/sdk");
   const client = new Sdk({ apiKey: o.schluessel, dangerouslyAllowBrowser: true, maxRetries: 2, timeout: 180_000 });
@@ -38,7 +55,7 @@ export async function kiLesen(o: {
   const kontext = [
     `Haushaltswährung CHF · heute ${o.heute}`,
     o.teile.some((t) => t.art === "pdf") ? "E-Beleg als PDF" : bilder > 1 ? `${bilder} überlappende Abschnitte eines langen Belegs, von oben nach unten` : "ein Foto",
-  ].join(" · ");
+  ].join(" · ") + (o.produkte?.length ? `\nBekannte Produkte: ${o.produkte.join(", ")}` : "");
   const inhalt: Anthropic.Beta.Messages.BetaContentBlockParam[] = [
     ...o.teile.map((t): Anthropic.Beta.Messages.BetaContentBlockParam => t.art === "pdf"
       ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: t.daten } }
@@ -74,6 +91,7 @@ export async function kiLesen(o: {
   let abweichungen = pruefen(extraktion, o.heute);
   let tokensIn = res.usage.input_tokens + (res.usage.cache_read_input_tokens ?? 0) + (res.usage.cache_creation_input_tokens ?? 0);
   let tokensOut = res.usage.output_tokens;
+  let kosten = kostenUsd(res.model, res.usage);
   let reparatur = false;
 
   // Reparatur-Runde (höchstens eine): Antwort unverändert zurück, dazu die konkreten Abweichungen
@@ -85,6 +103,8 @@ export async function kiLesen(o: {
         { role: "user", content: [{ type: "text", text: reparaturText(abweichungen) }] }]);
       tokensIn += res2.usage.input_tokens + (res2.usage.cache_read_input_tokens ?? 0) + (res2.usage.cache_creation_input_tokens ?? 0);
       tokensOut += res2.usage.output_tokens;
+      const k2 = kostenUsd(res2.model, res2.usage);
+      kosten = kosten == null || k2 == null ? null : kosten + k2;
       if (res2.stop_reason !== "refusal" && res2.stop_reason !== "max_tokens") {
         const e2 = lesen(res2);
         const a2 = pruefen(e2, o.heute);
@@ -96,6 +116,6 @@ export async function kiLesen(o: {
   }
   return {
     extraktion, abweichungen, modell: res.model, requestId: (res as { _request_id?: string | null })._request_id ?? null,
-    tokensIn, tokensOut, roh: res, reparatur,
+    tokensIn, tokensOut, kostenUsd: kosten, roh: res, reparatur,
   };
 }

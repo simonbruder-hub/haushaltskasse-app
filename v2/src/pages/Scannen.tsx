@@ -11,6 +11,8 @@ import { KiFehler, kiLesen, MODELLE, type Teil } from "../scan/ki";
 import { ocrLesen } from "../scan/ocr";
 import { Kamera } from "../scan/dokument/Kamera";
 import { zusammensetzen } from "../scan/dokument/seite";
+import { packungText, vergleichFuer } from "../produkte/menge";
+import type { Einheit } from "../lib/belege";
 import { KategorieWahl, TopfChips, useKategorien } from "../ui/Auswahl";
 import { Avatar, farbe, Feld, Seg, Seite, Sheet, useAktion } from "../ui/kit";
 import { Icon } from "../ui/Icon";
@@ -64,14 +66,17 @@ export function Scannen({ kamera: mitKamera = false }: { kamera?: boolean }) {
       // direkt aus der Datenbank: beim Öffnen der Seite sind die Kategorien im Hook evtl. noch nicht geladen
       const katNamen = (await d.query<{ name: string }>(`select c.name from category c join life_area la on la.id = c.life_area_id
          where c.household_id = $1 and c.archived_at is null and la.archived_at is null order by la.sort, c.sort`, [household])).rows.map((k) => k.name);
+      // Bekannte Produkte (die häufigsten zuerst): die KI übernimmt deren Namen, so entstehen keine Doppelten
+      const produkte = (await d.query<{ name: string }>(`select p.name from master_product p left join line_item l on l.master_product_id = p.id
+         where p.household_id = $1 and p.deleted_at is null group by p.id, p.name order by count(l.id) desc, p.name limit 200`, [household])).rows.map((p) => p.name);
       let extraktion, abweichungen: Abweichung[] = [], quelle: "ki" | "ocr" = "ki", protokoll: ScanEntwurf["protokoll"] = null;
       const kiMoeglich = ki && navigator.onLine && !erzwingeOffline;
       if (kiMoeglich) {
         try {
           const teile: Teil[] = pdf ? [{ art: "pdf", daten: await zuBase64(f!) }] : await Promise.all(vorb!.abschnitte.map(async (b) => ({ art: "bild" as const, daten: await zuBase64(b) })));
-          const r = await kiLesen({ teile, kategorien: katNamen, heute: heute(), schluessel: ki.schluessel, modell: ki.modell, status: (t) => setPhase({ art: "lesen", text: t, anteil: null }) });
+          const r = await kiLesen({ teile, kategorien: katNamen, produkte, heute: heute(), schluessel: ki.schluessel, modell: ki.modell, status: (t) => setPhase({ art: "lesen", text: t, anteil: null }) });
           extraktion = r.extraktion; abweichungen = r.abweichungen;
-          protokoll = { modell: r.modell, requestId: r.requestId, tokensIn: r.tokensIn, tokensOut: r.tokensOut, roh: r.roh, parsed: r.extraktion };
+          protokoll = { modell: r.modell, requestId: r.requestId, tokensIn: r.tokensIn, tokensOut: r.tokensOut, kostenUsd: r.kostenUsd, roh: r.roh, parsed: r.extraktion };
         } catch (e) {
           if (pdf || !(e instanceof KiFehler && e.offline)) throw e;
           quelle = "ocr";   // kein Netz: offline weiterlesen
@@ -263,8 +268,8 @@ function Pruefen({ e, setE, konto, setKonto, bild, gross, setGross, bearbeiten, 
                 <span className="mt-2 size-2.5 rounded-full flex-none" style={{ background: STATUS[x.status][0] }} title={STATUS[x.status][1]} />
                 <button className="grid flex-1 min-w-0 text-left gap-0.5 bg-transparent border-0 p-0 cursor-pointer" onClick={() => setBearbeiten(i)} aria-label={`${x.name} bearbeiten`}>
                   <span className="font-semibold truncate">{x.name}</span>
-                  <span className="font-mono text-[11.5px] text-muted truncate">{x.raw}{x.menge ? ` · ${x.menge} ${x.einheit === "piece" ? "×" : x.einheit}${x.einzelpreis ? " à " + geld(x.einzelpreis) : ""}` : ""}</span>
-                  {x.hinweis && <span className="text-[12px] text-crit">{x.hinweis}</span>}
+                  <span className="font-mono text-[11.5px] text-muted truncate">{x.raw}{x.menge ? ` · ${x.menge} ${x.einheit === "piece" ? "×" : x.einheit}${x.einzelpreis ? " à " + geld(x.einzelpreis) : ""}` : ""}{x.packung ? ` · ${packungText(x.packung)}` : ""}</span>
+                  {x.hinweis && <span className={`text-[12px] ${x.status === "pruefen" ? "text-crit" : "text-[var(--warn-ink)]"}`}>{x.hinweis}</span>}
                   <span className="flex flex-wrap gap-1 mt-1">
                     {x.typ === "product"
                       ? <span className="chip !text-[11px] !px-2 !py-0.5 bg-[var(--paper-2)]">{kats.find((k) => k.id === x.kategorie)?.name ?? "Kategorie wählen"}</span>
@@ -282,7 +287,7 @@ function Pruefen({ e, setE, konto, setKonto, bild, gross, setGross, bearbeiten, 
         </div>
         <button className="btn" onClick={() => {
           setE({ ...e, zeilen: [...e.zeilen, { key: "neu-" + Date.now(), raw: "Position", name: "Position", typ: "product", betrag: 0, rabatt: 0, rabattText: null, korbRabatt: 0, korbText: null,
-            menge: null, einheit: null, einzelpreis: null, vergleich: "per_piece", kategorie: haupt, topf: null, status: "neu", vorschlag: null, hinweis: null }] });
+            menge: null, einheit: null, einzelpreis: null, packung: null, vergleich: "per_piece", kategorie: haupt, topf: null, status: "neu", vorschlag: null, hinweis: null }] });
           setBearbeiten(e.zeilen.length);
         }}><Icon name="plus" />Position</button>
       </div>
@@ -337,6 +342,7 @@ function Pruefen({ e, setE, konto, setKonto, bild, gross, setGross, bearbeiten, 
             </div>
             <Seg label="Art der Position" wert={z.typ} onChange={(v) => aendern(bearbeiten, { typ: v })}
               optionen={[["product", "Ware"], ["deposit_or_fee", "Depot / Gebühr"], ["refund_or_return", "Retoure"]]} />
+            {z.typ === "product" && !(z.menge && z.einheit !== "piece") && <PackungFeld z={z} aendern={(v) => aendern(bearbeiten, v)} />}
             {z.typ === "product" && <Feld gruppe label="Kategorie"><KategorieWahl wert={z.kategorie} onChange={(v) => aendern(bearbeiten, { kategorie: v, topf: null })} /></Feld>}
             <Feld gruppe label="Für wen"><TopfChips wert={topfVon(z)} onChange={(v) => aendern(bearbeiten, { topf: v })} /></Feld>
             <div className="grid grid-cols-2 gap-2">
@@ -347,5 +353,29 @@ function Pruefen({ e, setE, konto, setKonto, bild, gross, setGross, bearbeiten, 
         )}
       </Sheet>
     </Seite>
+  );
+}
+
+/** Packungsgrösse einer Position: Grundlage für den Preis pro kg, l oder Stück */
+function PackungFeld({ z, aendern }: { z: ScanZeile; aendern: (v: Partial<ScanZeile>) => void }) {
+  const [groesse, setGroesse] = useState(z.packung ? String(z.packung.groesse) : "");
+  const [einheit, setEinheit] = useState<Einheit>(z.packung?.einheit ?? "g");
+  const [anzahl, setAnzahl] = useState(String(z.packung?.anzahl ?? 1));
+  const setzen = (g: string, e: Einheit, a: string) => {
+    setGroesse(g); setEinheit(e); setAnzahl(a);
+    const wert = zahl(g), n = Math.max(1, Math.round(zahl(a)) || 1);
+    aendern(wert > 0 ? { packung: { groesse: wert, einheit: e, anzahl: n }, vergleich: vergleichFuer(e) } : { packung: null });
+  };
+  return (
+    <Feld gruppe label="Packung" hinweis="Für den Preisvergleich pro kg, l oder Stück. Leer lassen, wenn unbekannt.">
+      <div className="grid grid-cols-[1fr_6.5rem_5.5rem] gap-2">
+        <input className="input mono" inputMode="decimal" aria-label="Packungsgrösse" placeholder="z. B. 500" value={groesse} onChange={(x) => setzen(x.target.value, einheit, anzahl)} />
+        <select className="input" aria-label="Einheit der Packung" value={einheit} onChange={(x) => setzen(groesse, x.target.value as Einheit, anzahl)}>
+          <option value="g">g</option><option value="kg">kg</option><option value="ml">ml</option><option value="l">l</option><option value="piece">Stück</option>
+        </select>
+        <label className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted">×</span>
+          <input className="input mono pl-7" inputMode="numeric" aria-label="Anzahl im Pack" value={anzahl} onChange={(x) => setzen(groesse, einheit, x.target.value)} /></label>
+      </div>
+    </Feld>
   );
 }

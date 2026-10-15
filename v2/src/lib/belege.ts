@@ -21,6 +21,8 @@ export interface Position {
   typ?: PositionsTyp;      // leer = Ware
   produkt?: string | null; // master_product (aus dem Kürzel-Wörterbuch)
   kuerzel?: string | null; // receipt_alias_mapping
+  artikel?: string | null; // merchant_product (Artikel dieses Ladens bzw. mit EAN)
+  packung?: { groesse: number; einheit: Einheit; anzahl: number } | null;   // Packungsgrösse zum Kaufzeitpunkt
   menge?: number | null;
   einheit?: Einheit | null;
   einzelpreis?: number | null;
@@ -123,11 +125,13 @@ export async function belegSchreiben(tx: Queryable, b: Beleg): Promise<string> {
       const typ = vorzeichen > 0 ? (p.typ ?? "product") : regulaer <= 0 ? "refund_or_return" : "deposit_or_fee";
       await tx.query(`insert into line_item (id, transaction_id, household_id, position, item_type, raw_text, regular_price, item_discount,
                         is_promo, promo_label, category_id, cost_account_id, master_product_id, alias_mapping_id,
-                        quantity, quantity_unit, regular_unit_price)
-                      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, coalesce($15::numeric, 1), coalesce($16::unit_type, 'piece'), $17::numeric)`,
+                        quantity, quantity_unit, regular_unit_price, merchant_product_id, unit_size, unit_type, pack_count)
+                      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, coalesce($15::numeric, 1), coalesce($16::unit_type, 'piece'), $17::numeric,
+                              $18, $19::numeric, $20::unit_type, coalesce($21::int, 1))`,
         [lid, id, b.household, ++nr, typ, p.text.trim() || "Position", regulaer, rabatt + korb, rabatt > 0,
           rabatt > 0 ? (p.rabattText?.trim() || "Rabatt") : null, p.kategorie, p.topf, p.produkt ?? null, p.kuerzel ?? null,
-          p.menge ?? null, p.einheit ?? null, p.einzelpreis ?? null]);
+          p.menge ?? null, p.einheit ?? null, p.einzelpreis ?? null,
+          p.artikel ?? null, p.packung?.groesse ?? null, p.packung ? p.packung.einheit : null, p.packung?.anzahl ?? null]);
       if (rabatt > 0) {
         await tx.query(`insert into line_item_discount (id, line_item_id, household_id, kind, label, amount) values ($1, $2, $3, 'promo', $4, $5)`,
           [uuid7(), lid, b.household, p.rabattText?.trim() || "Rabatt", rabatt]);
@@ -162,9 +166,11 @@ export async function belegLaden(d: Db, id: string): Promise<Beleg | null> {
   if (!h) return null;
   const v = h.kind === "refund" ? -1 : 1;
   const pos = (await d.query<{ raw_text: string; final_price: string; item_discount: string; category_id: string | null; cost_account_id: string | null;
-    item_type: PositionsTyp; master_product_id: string | null; alias_mapping_id: string | null; quantity: string; quantity_unit: Einheit; regular_unit_price: string | null }>(
+    item_type: PositionsTyp; master_product_id: string | null; alias_mapping_id: string | null; quantity: string; quantity_unit: Einheit; regular_unit_price: string | null;
+    merchant_product_id: string | null; unit_size: string | null; unit_type: Einheit | null; pack_count: number }>(
     `select raw_text, final_price::text, item_discount::text, category_id, cost_account_id, item_type::text, master_product_id, alias_mapping_id,
-            quantity::text, quantity_unit::text, regular_unit_price::text from line_item where transaction_id = $1 order by position`, [id])).rows;
+            quantity::text, quantity_unit::text, regular_unit_price::text, merchant_product_id, unit_size::text, unit_type::text, pack_count
+       from line_item where transaction_id = $1 order by position`, [id])).rows;
   const zahl = (await d.query<{ kind: string; amount: string; account_id: string | null; payment_method_id: string | null; label: string | null }>(
     `select kind, amount::text, account_id, payment_method_id, label from transaction_payment where transaction_id = $1 order by position`, [id])).rows;
   const einzel = pos.length === 1 && !pos[0].cost_account_id && !pos[0].master_product_id;
@@ -174,7 +180,8 @@ export async function belegLaden(d: Db, id: string): Promise<Beleg | null> {
     kategorie: pos[0]?.category_id ?? null, notiz: h.notes, bezeichnung: einzel ? pos[0].raw_text : null,
     positionen: einzel ? [] : pos.map((p) => ({
       text: p.raw_text, betrag: v * Number(p.final_price), rabatt: Number(p.item_discount) || undefined, kategorie: p.category_id, topf: p.cost_account_id,
-      typ: v > 0 ? p.item_type : undefined, produkt: p.master_product_id, kuerzel: p.alias_mapping_id,
+      typ: v > 0 ? p.item_type : undefined, produkt: p.master_product_id, kuerzel: p.alias_mapping_id, artikel: p.merchant_product_id,
+      packung: p.unit_size != null && p.unit_type ? { groesse: Number(p.unit_size), einheit: p.unit_type, anzahl: p.pack_count } : null,
       ...(p.quantity_unit !== "piece" || Number(p.quantity) !== 1
         ? { menge: Number(p.quantity), einheit: p.quantity_unit, einzelpreis: p.regular_unit_price == null ? null : Number(p.regular_unit_price) } : {}),
     })),

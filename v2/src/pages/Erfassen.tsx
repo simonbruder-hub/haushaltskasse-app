@@ -10,7 +10,7 @@ import { KategorieWahl, TopfChips, useKategorien } from "../ui/Auswahl";
 import { Avatar, farbe, Feld, Seg, Seite, useAktion } from "../ui/kit";
 import { Icon } from "../ui/Icon";
 
-// Aus einem gescannten Beleg: Typ, Produkt, Kürzel und Menge laufen beim Bearbeiten unverändert mit
+// Aus einem gescannten Beleg: Typ, Produkt, Kürzel, Artikel, Packung und Menge laufen beim Bearbeiten unverändert mit
 interface PosForm { text: string; betrag: string; rabatt: string; kategorie: string | null; topf: string | null; mit?: Partial<Position> }
 interface Laden { id: string; name: string; chain_key: string; n: number }
 const ZAHLARTEN: [string, string][] = [["debit_card", "Karte"], ["twint", "Twint"], ["cash", "Bar"], ["bank_transfer", "Überweisung"], ["credit_card", "Kreditkarte"]];
@@ -63,7 +63,7 @@ export function Erfassen({ id }: { id?: string }) {
       if (b.positionen.length) {
         setAufteilen(true); setDetails(true);
         setPositionen(b.positionen.map((p) => ({ text: p.text, betrag: String(p.betrag), rabatt: p.rabatt ? String(p.rabatt) : "", kategorie: p.kategorie, topf: p.topf,
-          mit: { typ: p.typ, produkt: p.produkt, kuerzel: p.kuerzel, menge: p.menge, einheit: p.einheit, einzelpreis: p.einzelpreis } })));
+          mit: { typ: p.typ, produkt: p.produkt, kuerzel: p.kuerzel, artikel: p.artikel, packung: p.packung, menge: p.menge, einheit: p.einheit, einzelpreis: p.einzelpreis } })));
       }
       if (b.waehrung && b.waehrung !== "CHF") setDetails(true);
     })();
