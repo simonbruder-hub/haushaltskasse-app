@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import { openDb } from "../db/client";
-import { datum } from "../lib/format";
+import { openDb, useQuery } from "../db/client";
+import { datum, monatName } from "../lib/format";
 import { sicherung } from "../lib/data";
 import { useHaushalt } from "../lib/haushalt";
 import { verbindung, verbindungSpeichern } from "../lib/supabase";
 import { abgleichNeu, abmelden, einladen, haushaltVerbinden, ichBin, syncPruefen, useSync } from "../lib/sync";
 import { Abschnitt, Avatar, farbe, Feld, Seite, Sheet, useAktion, useToast } from "../ui/kit";
 import { kiEinstellung, kiSpeichern } from "../scan/einstellung";
-import { MODELLE, STANDARD_MODELL } from "../scan/ki";
+import { kostenText, MODELLE, STANDARD_MODELL } from "../scan/ki";
 import { Icon } from "../ui/Icon";
 import { CodeLogin, VerbindungFormular } from "../ui/Anmeldung";
 
@@ -179,8 +179,30 @@ function KiErkennung() {
         {ungueltig && <p className="text-crit text-[13px]">Das sieht nicht wie ein Anthropic-Schlüssel aus (beginnt mit «sk-ant-»).</p>}
         <button className="btn btn-primary" disabled={(!ki && !neu) || ungueltig || (!!ki && !neu && modell === ki.modell)} onClick={speichern}>Speichern</button>
         {ki && <button className="btn btn-ghost" onClick={() => { kiSpeichern(null); setKi(null); toast("KI-Erkennung ausgeschaltet"); }}>KI-Erkennung ausschalten</button>}
+        <KiKosten />
         <p className="text-muted text-[12.5px]">Datenschutz: Das Belegfoto geht zur Erkennung an Anthropic und wird über dein Anthropic-Konto abgerechnet. Belegfotos bleiben sonst nur auf diesem Handy.</p>
       </div>
     </Abschnitt>
+  );
+}
+
+/** Was die KI-Erkennung auf diesem Handy bisher gekostet hat (aus den Token-Zahlen der Antworten) */
+function KiKosten() {
+  const { household } = useHaushalt();
+  const r = useQuery<{ monat: string; n: number; usd: string | null }>(
+    `select to_char(created_at at time zone 'Europe/Zurich', 'YYYY-MM') as monat, count(*)::int as n, sum(cost_usd)::text as usd
+       from scan_job where household_id = $1 and model like 'claude%' group by 1 order by 1 desc limit 3`, [household]);
+  if (!r?.length) return null;
+  return (
+    <div className="card-flat p-3 grid gap-1 text-[13px]" data-testid="ki-kosten">
+      <span className="font-semibold">Gelesene Belege</span>
+      {r.map((m) => (
+        <span key={m.monat} className="flex justify-between gap-2">
+          <span>{monatName(m.monat)} · {m.n} {m.n === 1 ? "Beleg" : "Belege"}</span>
+          <span className="num">{kostenText(m.usd) ?? "–"}</span>
+        </span>
+      ))}
+      <span className="text-muted text-[12px]">Geschätzt aus den Tokens zum Listenpreis (1 USD ≈ 0.80 CHF). Massgebend ist die Abrechnung auf console.anthropic.com.</span>
+    </div>
   );
 }

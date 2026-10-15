@@ -19,6 +19,15 @@ const PREISE: Record<string, { ein: number; aus: number; cache: number }> = {
 };
 /** Ungefährer Wechselkurs für die Anzeige in CHF */
 export const USD_CHF = 0.8;
+/** «Claude Opus 5.5» aus der Modell-ID der Antwort */
+export const modellName = (id: string | null | undefined) =>
+  !id ? "?" : id === "tesseract" ? "Texterkennung auf dem Handy" : id.replace(/^claude-([a-z]+)-(\d+)-(\d+).*$/, (_, n: string, a: string, b: string) => `Claude ${n[0].toUpperCase()}${n.slice(1)} ${a}.${b}`);
+/** Kosten in CHF, gerundet auf Rappen; kleine Beträge als «unter 1 Rp.» */
+export const kostenText = (usd: number | string | null | undefined) => {
+  if (usd == null || usd === "") return null;
+  const chf = Number(usd) * USD_CHF;
+  return chf < 0.005 ? "unter 1 Rp." : `ca. CHF ${chf.toFixed(2)}`;
+};
 
 /** Kosten einer Antwort in USD; null, wenn das Modell (z. B. ein Ersatzmodell) keinen hinterlegten Preis hat */
 export function kostenUsd(modell: string, u: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number | null; cache_creation_input_tokens?: number | null }): number | null {

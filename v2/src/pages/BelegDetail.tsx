@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { db, useQuery } from "../db/client";
 import { dateiLaden } from "../scan/dateien";
+import { kostenText, modellName } from "../scan/ki";
 import { datum, geld } from "../lib/format";
 import { BELEG_ART, belegLoeschen } from "../lib/belege";
 import { topfOptionen } from "../lib/auswahl";
@@ -126,6 +127,7 @@ export function BelegDetail({ id }: { id: string }) {
       </div>
 
       {h.sha && <BelegFoto sha={h.sha} mime={h.mime ?? "image/jpeg"} />}
+      <ScanInfo id={h.id} />
 
       {h.notes && <div className="card-flat p-3.5 text-[14px]"><span className="eyebrow block mb-1">Notiz</span>{h.notes}</div>}
 
@@ -157,5 +159,23 @@ function BelegFoto({ sha, mime }: { sha: string; mime: string }) {
       </button>
       <Sheet offen={gross} onClose={() => setGross(false)} titel="Belegfoto"><img src={url} alt="Belegfoto gross" className="w-full rounded-xl" /></Sheet>
     </>
+  );
+}
+
+/** Wie der Beleg gelesen wurde: Modell, Tokens, Kosten (nur auf dem Handy, das gescannt hat) */
+function ScanInfo({ id }: { id: string }) {
+  const j = useQuery<{ model: string | null; tokens_in: number | null; tokens_out: number | null; cost_usd: string | null; fehler: number }>(
+    `select model, tokens_in, tokens_out, cost_usd::text, cardinality(validation_errors) as fehler from scan_job where transaction_id = $1 order by created_at desc limit 1`, [id])?.[0];
+  if (!j?.model) return null;
+  const tsd = (n: number | null) => (n == null ? "?" : n.toLocaleString("de-CH"));
+  const kosten = kostenText(j.cost_usd);
+  return (
+    <p className="card-flat p-3 text-[13px] text-ink-2 flex items-start gap-2" data-testid="scan-info">
+      <Icon name="info" size={16} className="mt-0.5 text-muted" />
+      <span>Gelesen mit <b>{modellName(j.model)}</b>
+        {j.tokens_in != null && <> · {tsd(j.tokens_in)} Tokens rein, {tsd(j.tokens_out)} raus</>}
+        {kosten && <> · <b>{kosten}</b></>}
+        {j.fehler > 0 && <> · {j.fehler} Abweichung{j.fehler === 1 ? "" : "en"} beim Prüfen</>}</span>
+    </p>
   );
 }

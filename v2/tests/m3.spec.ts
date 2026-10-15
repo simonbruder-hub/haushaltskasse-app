@@ -73,6 +73,8 @@ test("M3: Beleg mit KI scannen, prüfen, Topf ändern, lernen", async ({ page })
   await expect(page.getByRole("button", { name: "Belegfoto anzeigen" })).toBeVisible();
   await expect(page.getByText(/^Gescannt/)).toBeVisible();
   await expect(page.getByRole("status")).toHaveText("Beleg gespeichert");
+  // Kosten: 5200 Tokens × 4 $ + 1800 × 20 $ pro Million = 0.0568 $ ≈ CHF 0.05
+  await expect(page.getByTestId("scan-info")).toHaveText("Gelesen mit Claude Opus 5.5 · 5’200 Tokens rein, 1’800 raus · ca. CHF 0.05");
 
   // Anfrage an Claude: Modell, Schema, Cache, Fallback, Bild
   const a = anfragen[0];
@@ -90,6 +92,15 @@ test("M3: Beleg mit KI scannen, prüfen, Topf ändern, lernen", async ({ page })
   await expect(page.getByText(/Dieses Foto wurde schon erfasst/)).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("Vorschlag", { exact: true })).toBeVisible();
   await expect(liste.getByRole("listitem", { name: "Gesichtscreme" })).toContainText("Kosmetik und Coiffeur");
+  // Die KI bekommt die bekannten Produkte mit, damit sie keine Doppelten anlegt
+  const text2 = JSON.stringify((anfragen[1].body.messages as { content: unknown[] }[])[0].content.at(-1));
+  expect(text2).toMatch(/Bekannte Produkte: .*Vollmilch/);
+  expect(text2).toContain("Gesichtscreme");
+
+  // Einstellungen: Kosten dieses Monats
+  await page.goto("./#/einstellungen");
+  await expect(page.getByTestId("ki-kosten")).toContainText("1 Beleg");
+  await expect(page.getByTestId("ki-kosten")).toContainText("ca. CHF 0.05");
 
   // Ausgleich: Eliana trägt die Hälfte der Lebensmittel und die Creme
   await page.getByRole("link", { name: "Ausgleich", exact: true }).click();
