@@ -216,7 +216,7 @@ function WerBinIch() {
 const MODULE: [string, string, string, boolean][] = [
   ["M1", "Fundament", "Konten, Töpfe, Personen, Kategorien, Abgleich", true],
   ["M2", "Belege und Ausgleich", "Einkäufe erfassen, Topf pro Position, wer schuldet wem", true],
-  ["M3", "Beleg-Scanner", "Foto oder PDF → Positionen, lernt eure Kürzel", false],
+  ["M3", "Beleg-Scanner", "Foto oder PDF → Positionen, lernt eure Kürzel", true],
   ["M4", "Produkte und Preise", "EAN-Scan im Laden, Preisvergleich, Shrinkflation", false],
   ["M5", "Budget und Konten", "Safe-to-Spend, Fixkosten, Verträge, Sparziele, Daueraufträge", false],
   ["M6", "Rechnungen und Planung", "QR-Rechnungen, Garantien, Smart Basket", false],

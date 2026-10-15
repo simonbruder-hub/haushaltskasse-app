@@ -5,6 +5,7 @@ import { BELEG_ART, belegLaden, belegSpeichern, ladenAnlegen, type Beleg, type B
 import { LADEN_FARBE, persoenlich, topfOptionen, vorschau, zahlKonten } from "../lib/auswahl";
 import { useHaushalt } from "../lib/haushalt";
 import { go } from "../lib/router";
+import { scanDateiSetzen } from "../scan/einstellung";
 import { KategorieWahl, TopfChips, useKategorien } from "../ui/Auswahl";
 import { Avatar, farbe, Feld, Seg, Seite, useAktion } from "../ui/kit";
 import { Icon } from "../ui/Icon";
@@ -134,11 +135,20 @@ export function Erfassen({ id }: { id?: string }) {
       neu = await belegSpeichern(d, b);
     }, id ? "Änderung gespeichert" : "Gespeichert");
     setBusy(false);
-    if (ok) go(id ? `belege/${neu}` : "belege");
+    if (ok && location.hash.startsWith("#/erfassen")) go(id ? `belege/${neu}` : "belege");   // nur, wenn man noch hier ist
   };
 
+  const scanWahl = (ev: React.ChangeEvent<HTMLInputElement>) => { const f = ev.target.files?.[0]; ev.target.value = ""; if (f) { scanDateiSetzen(f); go("scan"); } };
   return (
     <Seite eyebrow={id ? "Beleg bearbeiten" : "Erfassen"} titel={BELEG_ART[art]} zurueck={id ? `belege/${id}` : undefined}>
+      {!id && (
+        <div className="grid grid-cols-2 gap-2">
+          <label className="btn btn-soft cursor-pointer"><Icon name="kamera" />Fotografieren
+            <input type="file" accept="image/*" capture="environment" className="hidden" aria-label="Beleg fotografieren" onChange={scanWahl} /></label>
+          <label className="btn cursor-pointer"><Icon name="blatt" />Foto / PDF
+            <input type="file" accept="image/*,application/pdf" className="hidden" aria-label="Beleg aus Datei" onChange={scanWahl} /></label>
+        </div>
+      )}
       <Seg label="Art" wert={art} onChange={setArt} optionen={[["purchase", "Einkauf"], ["bill", "Rechnung"], ["refund", "Gutschrift"]]} />
 
       <div className="card p-4 grid gap-2">

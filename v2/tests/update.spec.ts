@@ -82,3 +82,36 @@ test("Update M1 → aktuell: Daten bleiben, Belege und Ausgleich funktionieren",
   expect(fehler.filter((f) => !/ErrnoError/.test(f))).toEqual([]);
   await ctx.close();
 });
+
+// Update von der veröffentlichten M2-Version mit einem echten Beleg
+const M2 = "e62e009";
+test("Update M2 → aktuell: Belege und Saldo bleiben, Scanner geht", async ({ browser }) => {
+  test.skip((() => { try { execFileSync("git", ["cat-file", "-e", M2], { cwd: repo, stdio: "ignore" }); return false; } catch { return true; } })(), "M2 nicht im Verlauf");
+  const alt = mkdtempSync(join(tmpdir(), "haushalt-m2-"));
+  execFileSync("sh", ["-c", `git archive ${M2} neu | tar -x -C "${alt}"`], { cwd: repo });
+  wurzel = join(alt, "neu");
+  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 412, height: 839 }, isMobile: true, hasTouch: true, locale: "de-CH" });
+  const page = await ctx.newPage();
+  const url = `http://localhost:${PORT}/`;
+  await page.goto(url);
+  await page.getByText("Neuen Haushalt einrichten").click({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Haushalt einrichten" }).click();
+  await expect(page.getByRole("heading", { name: "Hallo Simon" })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("link", { name: "Erfassen", exact: true }).click();
+  await page.getByLabel("Betrag", { exact: true }).fill("50");
+  await page.getByRole("group", { name: "Wo", exact: true }).getByRole("button", { name: "Migros" }).click();
+  await page.getByRole("group", { name: "Was", exact: true }).getByRole("button", { name: "Lebensmittel" }).click();
+  await page.getByRole("button", { name: /^Speichern/ }).click();
+  await expect(page.getByRole("status")).toHaveText("Gespeichert", { timeout: 15_000 });
+  await expect(page.getByLabel("Beleg aus Datei")).toHaveCount(0);   // M2 hat noch keinen Scanner
+
+  wurzel = aktuell;
+  await page.goto(url + "#/ausgleich");
+  await page.reload();
+  await expect(page.getByTestId("saldo-betrag")).toHaveText("CHF 25.00", { timeout: 30_000 });
+  await page.getByRole("link", { name: "Belege", exact: true }).click();
+  await expect(page.getByRole("link", { name: /Migros/ })).toContainText("50.00");
+  await page.getByRole("link", { name: "Erfassen", exact: true }).click();
+  await expect(page.getByLabel("Beleg aus Datei")).toHaveCount(1);
+  await ctx.close();
+});

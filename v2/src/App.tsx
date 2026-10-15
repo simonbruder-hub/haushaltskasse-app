@@ -18,6 +18,7 @@ import { Belege } from "./pages/Belege";
 import { BelegDetail } from "./pages/BelegDetail";
 import { Ausgleich } from "./pages/Ausgleich";
 import { Mehr } from "./pages/Mehr";
+import { Scannen } from "./pages/Scannen";
 
 export function App() {
   const st = useLiveQuery<{ key: string; value: string }>(`select key, value from _sync_state where key in ('household_id', 'person_id')`);
@@ -84,6 +85,7 @@ function MitHaushalt({ household, ich }: { household: string; ich: string | null
     case "belege": inhalt = id ? <BelegDetail id={id} /> : <Belege />; break;
     case "ausgleich": inhalt = <Ausgleich />; break;
     case "mehr": inhalt = <Mehr />; break;
+    case "scan": inhalt = <Scannen />; break;
     default: inhalt = <Uebersicht />;
   }
   return (

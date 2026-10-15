@@ -178,6 +178,22 @@ describe("Scanner: Schema, Prüfung, Entwurf, Lernen", () => {
     expect((await d.query<{ n: number }>(`select count(*)::int n from scan_job where transaction_id = $1`, [ersterBeleg])).rows[0].n).toBe(1);
   });
 
+  test("Mit Foto: Anhang wird verknüpft, dasselbe Foto erkennt die App wieder", async () => {
+    const abgelegt: string[] = [];
+    const datei = { blob: new Blob(["jpeg"], { type: "image/jpeg" }), sha: "a".repeat(64), mime: "image/jpeg" };
+    const x = beispiel();
+    x.transaction.date = "2026-10-04";
+    const e = await entwurfBauen(d, { household: HH, extraktion: x, quelle: "ki", kanal: "receipt_image", abweichungen: [], heute, datei, protokoll: null });
+    const id = await entwurfSpeichern(d, e, ctx(), async (sha) => { abgelegt.push(sha); });
+    expect(abgelegt).toEqual(["a".repeat(64)]);
+    const a = (await d.query<{ sha: string; pfad: string }>(`select a.sha256 sha, a.storage_path pfad from transaction_header h join attachment a on a.id = h.receipt_attachment_id
+       where h.id = $1`, [id])).rows[0];
+    expect(a).toEqual({ sha: "a".repeat(64), pfad: "lokal/" + "a".repeat(64) });
+    const nochmals = await entwurfBauen(d, { household: HH, extraktion: x, quelle: "ki", kanal: "receipt_image", abweichungen: [], heute, datei, protokoll: null });
+    expect(nochmals.hinweise.join(" ")).toContain("Dieses Foto wurde schon erfasst (Beleg vom 2026-10-04)");
+    await belegLoeschen(d, id);
+  });
+
   test("Zweiter Scan: bekannte Kürzel als Vorschlag, Hinweis auf möglichen Doppelbeleg", async () => {
     const ohneKi = beispiel();
     ohneKi.line_items = ohneKi.line_items.map((z) => ({ ...z, product_name: null, category: null }));   // z. B. Offline-Erkennung

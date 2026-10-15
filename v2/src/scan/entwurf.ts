@@ -46,6 +46,7 @@ export interface ScanEntwurf {
 const r2 = (x: number) => Math.round(x * 100) / 100;
 const ZAHLARTEN = ["cash", "debit_card", "credit_card", "twint", "bank_transfer", "ebill", "voucher", "gift_card", "loyalty_points", "reka", "lunch_check", "other"];
 const istGutschein = (art: string) => (GUTSCHEIN_ARTEN as readonly string[]).includes(art);
+const SUPERMAERKTE = ["migros", "coop", "denner", "lidl", "aldi", "volg", "spar", "migrolino", "coop_pronto", "avec"];
 
 function vergleichVon(einheit: string | null | undefined): Vergleich {
   if (einheit === "g" || einheit === "kg") return "per_1kg";
@@ -126,6 +127,16 @@ export async function entwurfBauen(d: Queryable, x: {
     };
   });
 
+  // Waren ohne Kategorie (z. B. offline gelesen): die bei diesem Laden häufigste Kategorie, bei Supermärkten sonst «Lebensmittel»
+  let standard: string | null = null;
+  if (laden) {
+    standard = (await d.query<{ category_id: string }>(`select l.category_id from line_item l join transaction_header h on h.id = l.transaction_id
+       where h.household_id = $1 and h.merchant_id = $2 and l.category_id is not null and l.item_type = 'product'
+       group by 1 order by count(*) desc limit 1`, [x.household, laden])).rows[0]?.category_id ?? null;
+  }
+  if (!standard && SUPERMAERKTE.includes(e.merchant.chain_key)) standard = katVonName("Lebensmittel");
+  for (const z of zeilen) if (z.typ === "product" && !z.kategorie) z.kategorie = standard;
+
   // Rabatt auf den ganzen Einkauf → anteilig auf die betroffenen Waren
   if (art === "purchase") {
     for (const kr of e.basket_discounts) {
@@ -194,7 +205,7 @@ export function topfFuer(z: ScanZeile, katTopf: (k: string | null) => string | n
 /** Bestätigen: Laden, Anhang, Kürzel lernen und Beleg buchen – alles in einer Transaktion. */
 export async function entwurfSpeichern(d: Db, e: ScanEntwurf, ctx: {
   household: string; konto: string; konten: Konto[]; ich: string | null; kategorien: { id: string; default_cost_account_id: string | null }[];
-}): Promise<string> {
+}, ablegen: (sha: string, blob: Blob) => Promise<void> = dateiSpeichern): Promise<string> {
   const kontoObj = ctx.konten.find((k) => k.id === ctx.konto);
   const kaeufer = kontoObj && kontoObj.owners.length === 1 ? kontoObj.owners[0].person_id : ctx.ich ?? kontoObj?.owners[0]?.person_id;
   if (!kaeufer) throw new Error("Bitte wählen, von welchem Konto bezahlt wurde.");
@@ -234,13 +245,14 @@ export async function entwurfSpeichern(d: Db, e: ScanEntwurf, ctx: {
     zahlungen, quelle: e.kanal, zeit: e.zeit, belegNr: e.belegNr,
   };
   vorbereiten(beleg);   // Summen prüfen, bevor etwas geschrieben wird
-  if (e.datei) await dateiSpeichern(e.datei.sha, e.datei.blob);
+  if (e.datei) await ablegen(e.datei.sha, e.datei.blob);
 
   return d.transaction(async (tx) => {
     if (!beleg.laden && e.ladenName.trim()) beleg.laden = await ladenAnlegen(tx, ctx.household, e.ladenName);
     if (e.datei) {
       await tx.query(`insert into attachment (id, household_id, kind, storage_path, mime_type, sha256)
-                      values (stabile_id('anhang', $1::text, $2), $1, $3, 'lokal/' || $2, $4, $2) on conflict do nothing`,
+                      values (stabile_id('anhang', $1::uuid::text, $2::text), $1::uuid, $3::attachment_kind, 'lokal/' || $2::text, $4, $2::text)
+                      on conflict do nothing`,
         [ctx.household, e.datei.sha, e.kanal, e.datei.mime]);
       beleg.anhang = (await tx.query<{ id: string }>(`select id from attachment where household_id = $1 and sha256 = $2`, [ctx.household, e.datei.sha])).rows[0].id;
     }

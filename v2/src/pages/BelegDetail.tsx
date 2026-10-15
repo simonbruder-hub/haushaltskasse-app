@@ -1,10 +1,12 @@
+import { useEffect, useState } from "react";
 import { db, useQuery } from "../db/client";
+import { dateiLaden } from "../scan/dateien";
 import { datum, geld } from "../lib/format";
 import { BELEG_ART, belegLoeschen } from "../lib/belege";
 import { topfOptionen } from "../lib/auswahl";
 import { useHaushalt } from "../lib/haushalt";
 import { go } from "../lib/router";
-import { Avatar, farbe, Leer, LoeschKnopf, Seite, useAktion } from "../ui/kit";
+import { Avatar, farbe, Leer, LoeschKnopf, Seite, Sheet, useAktion } from "../ui/kit";
 import { Icon } from "../ui/Icon";
 import { LadenMarke } from "./Belege";
 
@@ -14,7 +16,8 @@ export const ZAHLART_TEXT: Record<string, string> = {
 };
 
 interface Kopf { id: string; kind: "purchase" | "bill" | "refund"; datum: string; total: number; total_chf: number; currency: string; kurs: number;
-  notes: string | null; topf: string; laden: string | null; chain_key: string | null; erfasst: string; geaendert: string }
+  notes: string | null; topf: string; laden: string | null; chain_key: string | null; erfasst: string; geaendert: string;
+  quelle: string; sha: string | null; mime: string | null }
 interface Pos { id: string; raw_text: string; betrag: number; rabatt: number; topf: string; eigener_topf: boolean; kategorie: string | null }
 interface Zahl { id: string; kind: string; betrag: number; betrag_chf: number | null; label: string | null; konto: string | null; mittel: string | null }
 interface Eff { person_id: string; paid: number; share: number; effect: number }
@@ -24,8 +27,9 @@ export function BelegDetail({ id }: { id: string }) {
   const aktion = useAktion();
   const kopf = useQuery<Kopf>(`select h.id, h.kind, h.booking_date::text as datum, h.total_amount::float8 as total, h.total_amount_base::float8 as total_chf,
       h.currency, h.fx_rate::float8 as kurs, h.notes, h.default_cost_account_id as topf, m.name as laden, m.chain_key,
-      h.created_at::text as erfasst, h.updated_at::text as geaendert
-    from transaction_header h left join merchant m on m.id = h.merchant_id where h.id = $1 and h.deleted_at is null`, [id]);
+      h.created_at::text as erfasst, h.updated_at::text as geaendert, h.source_channel::text as quelle, a.sha256 as sha, a.mime_type as mime
+    from transaction_header h left join merchant m on m.id = h.merchant_id left join attachment a on a.id = h.receipt_attachment_id
+   where h.id = $1 and h.deleted_at is null`, [id]);
   const pos = useQuery<Pos>(`select l.id, l.raw_text, l.final_price::float8 as betrag, l.item_discount::float8 as rabatt,
       coalesce(l.cost_account_id, h.default_cost_account_id) as topf, l.cost_account_id is not null as eigener_topf, c.name as kategorie
     from line_item l join transaction_header h on h.id = l.transaction_id left join category c on c.id = l.category_id
@@ -121,12 +125,37 @@ export function BelegDetail({ id }: { id: string }) {
         </div>
       </div>
 
+      {h.sha && <BelegFoto sha={h.sha} mime={h.mime ?? "image/jpeg"} />}
+
       {h.notes && <div className="card-flat p-3.5 text-[14px]"><span className="eyebrow block mb-1">Notiz</span>{h.notes}</div>}
 
-      <p className="text-muted text-[12px] px-1">Erfasst {new Date(h.erfasst).toLocaleString("de-CH")}{h.geaendert !== h.erfasst ? ` · geändert ${new Date(h.geaendert).toLocaleString("de-CH")}` : ""}</p>
+      <p className="text-muted text-[12px] px-1">{h.quelle === "receipt_image" ? "Gescannt" : h.quelle === "receipt_pdf" ? "Aus PDF gelesen" : "Erfasst"} {new Date(h.erfasst).toLocaleString("de-CH")}{h.geaendert !== h.erfasst ? ` · geändert ${new Date(h.geaendert).toLocaleString("de-CH")}` : ""}</p>
 
       <LoeschKnopf text="Beleg löschen" frage="Den Beleg mit allen Positionen löschen? Der Ausgleich wird neu berechnet."
         onJa={async () => { if (await aktion(async () => belegLoeschen(await db(), h.id), "Beleg gelöscht")) go("belege"); }} />
     </Seite>
+  );
+}
+
+/** Foto oder PDF des Belegs – liegt nur auf dem Handy, das ihn gescannt hat */
+function BelegFoto({ sha, mime }: { sha: string; mime: string }) {
+  const [url, setUrl] = useState<string | null | undefined>(undefined);
+  const [gross, setGross] = useState(false);
+  useEffect(() => {
+    let weg: string | null = null;
+    dateiLaden(sha).then((b) => { if (b) { weg = URL.createObjectURL(b); setUrl(weg); } else setUrl(null); }).catch(() => setUrl(null));
+    return () => { if (weg) URL.revokeObjectURL(weg); };
+  }, [sha]);
+  if (url === undefined) return null;
+  if (url === null) return <p className="card-flat p-3.5 text-muted text-[13.5px] flex items-center gap-2"><Icon name="kamera" size={18} />Das Belegfoto liegt auf dem Handy, das ihn gescannt hat.</p>;
+  if (mime === "application/pdf") return <a href={url} target="_blank" rel="noreferrer" className="btn no-underline"><Icon name="blatt" />PDF des Belegs öffnen</a>;
+  return (
+    <>
+      <button className="card p-2 flex items-center gap-3 text-left" onClick={() => setGross(true)} aria-label="Belegfoto anzeigen">
+        <img src={url} alt="Belegfoto" className="w-14 h-18 object-cover object-top rounded-lg" />
+        <span className="grid"><b>Belegfoto</b><span className="text-muted text-[12.5px]">Antippen zum Vergrössern</span></span>
+      </button>
+      <Sheet offen={gross} onClose={() => setGross(false)} titel="Belegfoto"><img src={url} alt="Belegfoto gross" className="w-full rounded-xl" /></Sheet>
+    </>
   );
 }

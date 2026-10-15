@@ -5,7 +5,9 @@ import { sicherung } from "../lib/data";
 import { useHaushalt } from "../lib/haushalt";
 import { verbindung, verbindungSpeichern } from "../lib/supabase";
 import { abgleichNeu, abmelden, einladen, haushaltVerbinden, ichBin, syncPruefen, useSync } from "../lib/sync";
-import { Abschnitt, Avatar, farbe, Seite, Sheet, useAktion } from "../ui/kit";
+import { Abschnitt, Avatar, farbe, Feld, Seite, Sheet, useAktion, useToast } from "../ui/kit";
+import { kiEinstellung, kiSpeichern } from "../scan/einstellung";
+import { MODELLE, STANDARD_MODELL } from "../scan/ki";
 import { Icon } from "../ui/Icon";
 import { CodeLogin, VerbindungFormular } from "../ui/Anmeldung";
 
@@ -25,11 +27,12 @@ export function Einstellungen() {
           ))}
         </div>
       </Abschnitt>
+      <KiErkennung />
       <Abgleich household={household} />
       <Daten household={household} />
       <Abschnitt titel="Über die App">
         <div className="card p-4 grid gap-1.5 text-[14px]">
-          <p><b>Haushalt</b> · Modul 1 (Fundament)</p>
+          <p><b>Haushalt</b> · Module 1–3 (Fundament, Belege und Ausgleich, Beleg-Scanner)</p>
           <p className="text-muted">Stand {typeof __BUILD__ === "string" ? __BUILD__ : "Entwicklung"}. Daten liegen in einer Datenbank auf diesem Handy und werden – wenn eingerichtet – mit eurem eigenen Supabase-Projekt abgeglichen.</p>
           <a className="text-accent-ink font-semibold" href="../">Zur bisherigen App «Kasse unterwegs»</a>
         </div>
@@ -138,6 +141,45 @@ function Gefahr() {
           localStorage.removeItem("haushalt-supabase");
           location.hash = ""; location.reload();
         }}>{sicher ? "Wirklich alles auf diesem Handy löschen" : "Alle Daten auf diesem Handy löschen"}</button>
+      </div>
+    </Abschnitt>
+  );
+}
+
+/** Belege lesen mit Claude: Schlüssel und Modell bleiben auf diesem Handy */
+function KiErkennung() {
+  const toast = useToast();
+  const [ki, setKi] = useState(kiEinstellung());
+  const [schluessel, setSchluessel] = useState("");
+  const [modell, setModell] = useState(ki?.modell ?? STANDARD_MODELL);
+  const neu = schluessel.trim();
+  const ungueltig = neu !== "" && !/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(neu);
+  const speichern = () => {
+    const v = { schluessel: neu || ki!.schluessel, modell };
+    kiSpeichern(v); setKi(v); setSchluessel("");
+    toast("KI-Erkennung gespeichert");
+  };
+  return (
+    <Abschnitt titel="Belege lesen (KI)" text="Claude von Anthropic liest Fotos und PDFs: Positionen, Rabatte, Zahlungen und passende Kategorien. Ohne KI liest das Handy selbst, aber weniger genau.">
+      <div className="card p-4 grid gap-3.5">
+        <p className="flex items-center gap-2 text-[14.5px]">
+          {ki ? <><Icon name="haken" className="text-accent-ink" /><b>Aktiv</b><span className="text-muted">· Schlüssel …{ki.schluessel.slice(-4)}</span></> : <><Icon name="info" className="text-muted" />Noch nicht eingerichtet</>}
+        </p>
+        <div className="grid gap-1.5" role="radiogroup" aria-label="Genauigkeit">
+          {MODELLE.map((m) => (
+            <label key={m.id} className={`card-flat p-3 flex gap-3 items-center cursor-pointer ${modell === m.id ? "border-[var(--accent)] bg-[var(--accent-wash)]" : ""}`}>
+              <input type="radio" name="ki-modell" className="accent-[var(--accent)] size-4" checked={modell === m.id} onChange={() => setModell(m.id)} />
+              <span className="grid"><b>{m.name}</b><span className="text-muted text-[12.5px]">{m.text}</span></span>
+            </label>
+          ))}
+        </div>
+        <Feld label={ki ? "Neuer API-Schlüssel (optional)" : "API-Schlüssel"} hinweis="Auf console.anthropic.com → API Keys erstellen und Guthaben laden. Der Schlüssel bleibt auf diesem Handy und wird nicht abgeglichen.">
+          <input className="input mono" type="password" autoComplete="off" placeholder="sk-ant-…" value={schluessel} onChange={(e) => setSchluessel(e.target.value)} />
+        </Feld>
+        {ungueltig && <p className="text-crit text-[13px]">Das sieht nicht wie ein Anthropic-Schlüssel aus (beginnt mit «sk-ant-»).</p>}
+        <button className="btn btn-primary" disabled={(!ki && !neu) || ungueltig || (!!ki && !neu && modell === ki.modell)} onClick={speichern}>Speichern</button>
+        {ki && <button className="btn btn-ghost" onClick={() => { kiSpeichern(null); setKi(null); toast("KI-Erkennung ausgeschaltet"); }}>KI-Erkennung ausschalten</button>}
+        <p className="text-muted text-[12.5px]">Datenschutz: Das Belegfoto geht zur Erkennung an Anthropic und wird über dein Anthropic-Konto abgerechnet. Belegfotos bleiben sonst nur auf diesem Handy.</p>
       </div>
     </Abschnitt>
   );

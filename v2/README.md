@@ -1,4 +1,4 @@
-# Haushalt – neue App (Module 1 und 2)
+# Haushalt – neue App (Module 1 bis 3)
 
 Läuft unter **https://simonbruder-hub.github.io/haushaltskasse-app/neu/** – parallel zur bisherigen App «Kasse unterwegs».
 Quellcode in diesem Ordner, der fertige Build liegt in `../neu/`.
@@ -36,6 +36,16 @@ Quellcode in diesem Ordner, der fertige Build liegt in `../neu/`.
 - **Übersicht:** Ausgleich, dieser Monat nach Topf, zuletzt erfasste Belege.
 - Konten, Kategorien, Personen und Einstellungen liegen jetzt unter **«Mehr»**.
 
+## Was M3 kann
+
+- **Beleg scannen:** Im Erfassen-Formular «Fotografieren» oder «Foto / PDF». Die App liest Laden, Datum, Uhrzeit, alle Positionen mit Menge und Rabatt, Rabatte auf den ganzen Einkauf, Rundung und Zahlungen (Karte über die letzten 4 Ziffern dem Konto zugeordnet, Gutscheine und Punkte ohne Konto).
+- **Zwei Wege:**
+  - **KI-Erkennung** mit Claude (Einstellungen → «Belege lesen»): sehr genau, schlägt pro Position Produkt und Kategorie vor, liest auch PDF-E-Belege. Braucht einen eigenen Anthropic-API-Schlüssel; Kosten je nach Modell von unter 1 Rappen (Haiku) bis etwa 10–15 Rappen (Opus) pro Beleg.
+  - **Ohne KI / ohne Netz:** Texterkennung auf dem Handy (Tesseract aus «Kasse unterwegs»). Weniger genau, kostenlos, nach dem ersten Gebrauch auch offline.
+- **Prüf-Dialog:** jede Position mit Ampel (gelernt · Vorschlag · KI · neu · prüfen), Kategorie und Topf mit einem Tipp änderbar, Summenkontrolle, Vorschau wer wem schuldet. Gebucht wird erst nach «Bestätigen».
+- **Lernt eure Kürzel:** Jede bestätigte Position kommt ins Wörterbuch (Laden + Belegtext → Produkt + Kategorie). Beim nächsten Beleg ist sie vorausgefüllt; ab der fünften Bestätigung gilt sie als sicher. Ohne Kategorie nimmt die App die bei diesem Laden übliche, bei Supermärkten «Lebensmittel».
+- **Belegfoto** bleibt auf dem Handy und ist im Beleg mit einem Tipp sichtbar. Ein zweites Mal dasselbe Foto oder derselbe Einkauf (Laden, Datum, Total) wird erkannt.
+
 ## Architektur
 
 ```
@@ -60,6 +70,7 @@ Browser (Handy)                              Supabase (eigenes Projekt)
 - **Aktualisierung der Oberfläche** (`src/db/client.ts`): Jede lokale Änderung schreibt in `_outbox`, jeder Abgleich meldet sich. Auf dieses eine Signal laden die Abfragen der Seiten neu. Das ist rund zehnmal schneller als eine Live-Abfrage pro Komponente.
 - **Datenbank-Versionen** (`src/db/migrations.ts`): Beim Start spielt die App fehlende Versionen ein (v1 = M1, v2 = M2). Vorhandene Daten bleiben erhalten.
 - **Sicher speichern** (`src/db/worker.ts`): Abfragen warten nicht auf IndexedDB (sonst wäre jede rund 0,3 s langsamer). Nach jeder Benutzeraktion schreibt die App aber alles fest; erst dann erscheint «Gespeichert». Geht die App in den Hintergrund, schreibt sie ebenfalls.
+- **Scanner** (`src/scan/`): `ki.ts` ruft die Claude-API direkt vom Handy auf (offizielles SDK, Structured Outputs nach `docs/scanner/receipt_extraction.schema.json`, Systemprompt `docs/scanner/system_prompt_beleg.md`, eine Reparatur-Runde bei falschen Summen). `pruefen.ts` prüft deterministisch, `entwurf.ts` baut den Prüf-Dialog und lernt beim Speichern (`produkt_sichern`, `confirm_alias`). `ocr.ts` lädt bei Bedarf `../ocr/` und `../bon.js` der alten App. Fotos liegen in IndexedDB (`dateien.ts`), in der Datenbank steht nur der Verweis (`attachment`).
 - **Server-Stand** (`app_schema_version()`): Vor dem Abgleich prüft die App, ob die Datenbank auf Supabase mindestens ihren Stand hat. Fehlt eine Migration, sendet sie nichts und sagt, welche Datei auszuführen ist.
 
 **Abweichungen vom Blueprint v2** (siehe `docs/BLUEPRINT.md`):
@@ -71,12 +82,14 @@ Browser (Handy)                              Supabase (eigenes Projekt)
 | `person.default_account_id` | `account.is_personal_default` | Vermeidet gegenseitige Fremdschlüssel; der Abgleich bleibt in fester Reihenfolge. |
 | `account_owner`, `person_income` ohne `household_id` | mit `id` + `household_id` | Einheitlicher Abgleich und einfache RLS |
 | `app_user` | entfällt | `household_member.user_id` zeigt direkt auf Supabase-Auth |
+| Scan über Edge Function | **direkter Aufruf vom Handy**, Schlüssel nur auf dem Gerät | Funktioniert ohne Supabase; die Logik in `src/scan/` lässt sich später unverändert in eine Edge Function verschieben. |
+| Alias-Vorschlag mit eigenem Modellaufruf | **Produkt und Kategorie im selben Aufruf** wie die Belegerkennung | Ein Aufruf statt zwei; das Wörterbuch lernt aus den Bestätigungen. |
 
 ## Supabase einrichten (einmalig, ca. 10 Minuten)
 
 1. Auf [supabase.com](https://supabase.com) ein Konto anlegen und ein **neues Projekt** erstellen. Den kostenlosen Plan wählen, als Region eine möglichst nahe (z. B. Zürich oder Frankfurt). Das Datenbank-Passwort gut aufbewahren.
-2. **SQL Editor** → «New query» → den Inhalt von `supabase/migrations/20261014000000_m1_fundament.sql` einfügen → **Run**. Danach genauso `supabase/migrations/20261015000000_m2_belege.sql`.
-   - Wer M1 schon eingerichtet hat, führt nur die zweite Datei aus.
+2. **SQL Editor** → «New query» → den Inhalt von `supabase/migrations/20261014000000_m1_fundament.sql` einfügen → **Run**. Danach genauso `…_m2_belege.sql` und `…_m3_scanner.sql`, in dieser Reihenfolge.
+   - Wer schon eingerichtet hat, führt nur die noch fehlenden Dateien aus. Fehlt eine, sagt die App beim Abgleich, welche.
 3. **Authentication → Email Templates:**
    - In den Vorlagen **«Confirm signup»** und **«Magic Link»** den Code einfügen, z. B. `<p>Dein Code: <b>{{ .Token }}</b></p>`.
    - Die App meldet mit diesem Code an, nicht mit dem Link.
@@ -94,7 +107,7 @@ Hinweis: Kostenlose Supabase-Projekte werden nach rund einer Woche ohne Nutzung 
 npm install
 npm run dev            # Entwicklungsserver
 npm run build          # Typprüfung + Build nach ../neu
-npm test               # Datenbank-Tests (Rechnen 60 Prüfungen, Belege, Abgleich, RLS)
+npm test               # Datenbank-Tests (Rechnen 60 Prüfungen, Belege, Scanner, Abgleich, RLS)
 npm run e2e            # Browser-Tests (Playwright)
 npm run migration      # supabase/migrations/… aus db/*.sql neu erzeugen
 ```
@@ -102,3 +115,5 @@ npm run migration      # supabase/migrations/… aus db/*.sql neu erzeugen
 Mit lokalem PostgreSQL und PostgREST (`POSTGREST_BIN=/pfad/postgrest`) laufen zusätzlich:
 - `db/tests/supabase.test.ts`: die echte Migration, RLS und der Abgleich über PostgREST und supabase-js
 - `tests/abgleich.spec.ts`: zwei Handys im Browser gegen diesen Nachbau (inklusive Beleg, Ausgleich und Korrektur)
+
+Weitere Browser-Tests: `m3.spec.ts` (Scanner mit simulierter Claude-API und echter Offline-Erkennung), `pages.spec.ts` (Aufbau wie GitHub Pages, Texterkennung offline), `update.spec.ts` (Update von M1 mit vorhandenen Daten).

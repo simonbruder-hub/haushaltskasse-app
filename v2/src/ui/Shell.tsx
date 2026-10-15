@@ -24,7 +24,7 @@ export function Shell({ seite, children }: { seite: string; children: ReactNode 
       <main className="grid gap-5">{children}</main>
       <nav className="tabs" aria-label="Hauptnavigation">
         {TABS.map(([pfad, text, icon]) => pfad === "erfassen" ? (
-          <a key={pfad} href="#/erfassen" className="fab" aria-label={text} aria-current={seite === pfad ? "page" : undefined}>
+          <a key={pfad} href="#/erfassen" className="fab" aria-label={text} aria-current={seite === pfad || seite === "scan" ? "page" : undefined}>
             <Icon name={icon} size={28} strokeWidth={2.4} />
           </a>
         ) : (

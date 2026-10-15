@@ -38,6 +38,7 @@ const PFADE: Record<string, string> = {
   suche: kreis(11, 11, 6.5) + "M20 20l-4.3-4.3",
   laden: "M4 9l1.6-5h12.8L20 9M4 9v11h16V9M4 9h16M9.5 20v-5.5h5V20",
   kalender: "M4 6h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4",
+  kamera: "M4 8h3l1.6-2.5h6.8L17 8h3v11H4z" + kreis(12, 13.2, 3.6),
   geschenk: "M4 11h16v9H4zM3 7.5h18V11H3zM12 7.5V20M12 7.5c-1.5-3-5-3.6-5-1.5 0 1.2 2 1.5 5 1.5zM12 7.5c1.5-3 5-3.6 5-1.5 0 1.2-2 1.5-5 1.5z",
 };
 
