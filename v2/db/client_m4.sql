@@ -52,4 +52,6 @@ begin
      and m.id in (select x::uuid from jsonb_array_elements_text(coalesce(p_changed -> 'master_product', '[]')) x);
   perform preisalarme_rechnen(m.household_id, m.id) from master_product m
     where m.id in (select x::uuid from jsonb_array_elements_text(coalesce(p_changed -> 'master_product', '[]')) x);
+  -- Schwellen für Preisalarme geändert
+  perform alle_preisalarme_rechnen(x::uuid) from jsonb_array_elements_text(coalesce(p_changed -> 'household_setting', '[]')) x;
 end $$;

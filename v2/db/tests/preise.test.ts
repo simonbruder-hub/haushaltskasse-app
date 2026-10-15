@@ -96,6 +96,10 @@ describe("Artikel pro Laden, Packung und Preisalarme (Blueprint §2.7)", () => {
     const al = await eins<{ kind: string; change_pct: string; old_base_quantity: string; new_base_quantity: string; seen_at: string | null }>(
       `select kind::text, change_pct::text, old_base_quantity::text, new_base_quantity::text, seen_at from v_price_alert where household_id = $1`, [H]);
     expect(al).toEqual({ kind: "shrinkflation", change_pct: "7.14", old_base_quantity: "300.000", new_base_quantity: "280.000", seen_at: null });
+    // Im Preisvergleich zählt nur noch die neue Packung: 4.95 / 0.28 kg
+    const p = (await d.query<{ laden: string; pro_einheit: string }>(`select laden, pro_einheit::text from produkt_preise($1, $2, '2026-10-15')`,
+      [H, await produkt("Kartoffelchips")])).rows;
+    expect(p).toEqual([{ laden: "Migros", pro_einheit: "17.6786" }]);
   });
 
   test("Preissprung: Kaffee 500 g 12.90 → 14.47 = +12.17 %; gleiche Packung → gleicher Artikel", async () => {

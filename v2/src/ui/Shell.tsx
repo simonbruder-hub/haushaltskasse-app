@@ -4,7 +4,7 @@ import { useHaushalt } from "../lib/haushalt";
 import { useSync } from "../lib/sync";
 
 const TABS: [string, string, string][] = [["", "Übersicht", "uebersicht"], ["belege", "Belege", "beleg"], ["erfassen", "Erfassen", "plus"], ["ausgleich", "Ausgleich", "ausgleich"], ["mehr", "Mehr", "mehr"]];
-const UNTER_MEHR = ["mehr", "konten", "kategorien", "personen", "einstellungen"];
+const UNTER_MEHR = ["mehr", "konten", "kategorien", "personen", "einstellungen", "preise", "preis-pruefen"];
 const tabVon = (seite: string) => (UNTER_MEHR.includes(seite) ? "mehr" : seite);
 
 export function Shell({ seite, children }: { seite: string; children: ReactNode }) {

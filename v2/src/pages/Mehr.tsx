@@ -11,7 +11,10 @@ export function Mehr() {
   const echte = konten.filter((k) => k.status === "active").length;
   const toepfe = konten.filter((k) => k.status === "virtual").length;
   const abgleich = s.modus === "lokal" ? "Nur auf diesem Handy" : s.modus === "abgemeldet" ? "Nicht angemeldet" : s.modus === "fehler" ? "Abgleich gestört" : "Mit dem Server verbunden";
+  const preise = useQuery<{ n: number; alarme: number }>(`select (select count(*) from master_product where household_id = $1 and deleted_at is null)::int as n,
+      (select count(*) from v_price_alert where household_id = $1 and seen_at is null)::int as alarme`, [household])?.[0];
   const eintraege: [string, string, string, string][] = [
+    ["preise", "preis", "Produkte und Preise", preise ? `${preise.n} ${preise.n === 1 ? "Produkt" : "Produkte"}${preise.alarme ? ` · ${preise.alarme} ${preise.alarme === 1 ? "Preisalarm" : "Preisalarme"}` : ""} · Preis prüfen` : ""],
     ["konten", "konten", "Konten und Töpfe", `${echte} ${echte === 1 ? "echtes Konto" : "echte Konten"} · ${toepfe} ${toepfe === 1 ? "Topf" : "Töpfe"} vorbereitet`],
     ["kategorien", "kategorien", "Kategorien", kat ? `${kat.n} Kategorien in ${kat.b} Lebensbereichen` : ""],
     ["personen", "personen", "Personen", personen.filter((p) => !p.archived_at).map((p) => p.display_name).join(", ")],

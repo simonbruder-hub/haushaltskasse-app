@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { openDb, useQuery } from "../db/client";
+import { db, openDb, useQuery } from "../db/client";
 import { datum, monatName } from "../lib/format";
 import { sicherung } from "../lib/data";
 import { useHaushalt } from "../lib/haushalt";
@@ -28,6 +28,7 @@ export function Einstellungen() {
         </div>
       </Abschnitt>
       <KiErkennung />
+      <PreisalarmEinstellung />
       <Abgleich household={household} />
       <Daten household={household} />
       <Abschnitt titel="Über die App">
@@ -204,5 +205,34 @@ function KiKosten() {
       ))}
       <span className="text-muted text-[12px]">Geschätzt aus den Tokens zum Listenpreis (1 USD ≈ 0.80 CHF). Massgebend ist die Abrechnung auf console.anthropic.com.</span>
     </div>
+  );
+}
+
+/** Ab welcher Preisänderung die App warnt (gilt für den ganzen Haushalt, wird abgeglichen) */
+function PreisalarmEinstellung() {
+  const { household } = useHaushalt();
+  const aktion = useAktion();
+  const s = useQuery<{ sprung: string; packung: string }>(
+    `select price_jump_threshold_pct::text as sprung, shrinkflation_min_size_drop_pct::text as packung from household_setting where household_id = $1`, [household])?.[0];
+  const [sprung, setSprung] = useState<string | null>(null);
+  if (!s) return null;
+  const wert = sprung ?? String(Number(s.sprung));
+  const n = Number(wert.replace(",", "."));
+  return (
+    <Abschnitt titel="Preisalarme" text="Die App warnt, wenn derselbe Artikel im gleichen Laden teurer oder günstiger wird, und wenn weniger in der Packung ist.">
+      <div className="card p-4 grid gap-3">
+        <Feld label="Alarm ab einer Preisänderung von (%)" hinweis={`Weniger in der Packung meldet die App ab ${Number(s.packung)} % kleinerer Packung zum gleichen Preis.`}>
+          <input className="input mono" inputMode="decimal" value={wert} onChange={(e) => setSprung(e.target.value)} />
+        </Feld>
+        <button className="btn" disabled={!(n >= 1 && n <= 100) || n === Number(s.sprung)} onClick={() => aktion(async () => {
+          const d = await db();
+          await d.transaction(async (tx) => {
+            await tx.query(`update household_setting set price_jump_threshold_pct = $2 where household_id = $1`, [household, n]);
+            await tx.query(`select alle_preisalarme_rechnen($1)`, [household]);
+          });
+          setSprung(null);
+        }, "Preisalarme angepasst")}>Speichern</button>
+      </div>
+    </Abschnitt>
   );
 }

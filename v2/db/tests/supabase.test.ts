@@ -108,4 +108,45 @@ describe.runIf(verfuegbar())("Nachbau Supabase: PostgreSQL 16 + PostgREST + supa
     expect(await syncA.pending()).toBe(0);
     expect((await syncB.sync()).pushed).toBe(0);
   });
+
+  test("M4: Artikel, Regalpreise und gelesene Alarme über PostgREST; Views schützen fremde Daten", async () => {
+    const q = async (sql: string, p: unknown[] = []) => (await a.query<{ id: string }>(sql, p)).rows[0].id;
+    const COOP = "00000000-0000-4000-8000-000000000002", LIDL = "00000000-0000-4000-8000-000000000004";
+    const leben = await q(`select id from account where name = 'Gemeinsam Leben'`), sp = await q(`select id from account where name = 'Simon Privat'`);
+    const simon = await q(`select id from person where sort = 1`);
+    const chips = await q(`select produkt_sichern($1, 'Kartoffelchips', null, 'per_1kg') as id`, [H]);
+    // Zwei Packungen desselben Artikels, beide neu in derselben Sendung: der Nachfolger verweist auf den Vorgänger
+    const kauf = async (datum: string, text: string, g: number) => {
+      const art = await q(`select artikel_sichern($1, $2, $3, $4, $5, 'g', 1) as id`, [H, COOP, text, chips, g]);
+      await belegSpeichern(a, { household: H, art: "purchase", datum, laden: COOP, total: 4.95, topf: leben, kaeufer: simon, kategorie: null,
+        positionen: [{ text, betrag: 4.95, kategorie: null, topf: null, produkt: chips, artikel: art, packung: { groesse: g, einheit: "g", anzahl: 1 } }],
+        zahlungen: [{ art: "debit_card", betrag: 4.95, konto: sp }] });
+    };
+    await kauf("2026-09-01", "ZWEIFEL CHIPS NATURE 300G", 300);
+    await kauf("2026-10-01", "ZWEIFEL CHIPS NATURE 280G", 280);
+    const ean = await q(`select ean_artikel_sichern($1, '7610200337030', $2, 'Chips Nature', 'Zweifel', 280, 'g', 1, null) as id`, [H, chips]);
+    await a.query(`insert into shelf_price (id, household_id, merchant_id, merchant_product_id, observed_on, price) values ($1, $2, $3, $4, '2026-10-10', 4.50)`,
+      [randomUUID(), H, LIDL, ean]);
+    const alarm = (await a.query<{ kind: string; source_id: string }>(`select kind::text, source_id from v_price_alert where household_id = $1`, [H])).rows;
+    expect(alarm.map((x) => x.kind)).toEqual(["shrinkflation"]);
+    await a.query(`select alarm_gelesen($1, $2, $3)`, [H, alarm[0].kind, alarm[0].source_id]);
+    expect((await syncA.sync()).error).toBeUndefined();
+    expect(sql(`copy (select count(*) from merchant_product where household_id = '${H}' and replaces_id is not null) to stdout`).trim()).toBe("1");
+    expect((await syncB.sync()).error).toBeUndefined();
+    const vergleich = async (db: Db) => (await db.query<{ laden: string; pro_einheit: string }>(
+      `select laden, pro_einheit::text from produkt_preise($1, $2, '2026-10-15')`, [H, chips])).rows;
+    expect(await vergleich(b)).toEqual(await vergleich(a));
+    expect((await vergleich(b)).map((x) => x.laden)).toEqual(["Lidl", "Coop"]);
+    const alarme = async (db: Db) => (await db.query<{ kind: string; gelesen: boolean; pct: string }>(
+      `select kind::text, seen_at is not null as gelesen, change_pct::text pct from v_price_alert where household_id = $1`, [H])).rows;
+    expect(await alarme(b)).toEqual([{ kind: "shrinkflation", gelesen: true, pct: "7.14" }]);
+    expect(await abbild(b, H)).toEqual(await abbild(a, H));
+    // Fremde: weder Tabellen noch Views zeigen etwas (Views laufen mit den Rechten der abfragenden Person)
+    const c = client(FREMD);
+    expect((await c.from("shelf_price").select("id")).data).toEqual([]);
+    expect((await c.from("merchant_product").select("id")).data).toEqual([]);
+    expect((await c.from("v_allocation").select("*")).data).toEqual([]);
+    expect((await c.from("v_settlement_balance").select("*")).data).toEqual([]);
+    expect((await client(SIMON).from("v_settlement_balance").select("*")).data?.length).toBeGreaterThan(0);
+  });
 });

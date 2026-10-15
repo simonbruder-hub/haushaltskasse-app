@@ -10,6 +10,7 @@ import { Avatar, farbe, KontoIcon } from "../ui/kit";
 import { Icon } from "../ui/Icon";
 import { BelegEintrag } from "./Belege";
 import { SALDO_SQL, schuld } from "./Ausgleich";
+import { ALARM_SQL, alarmText, type Alarm } from "../lib/preise";
 
 export function Uebersicht() {
   const { ich, personen, konten } = useHaushalt();
@@ -29,6 +30,7 @@ export function Uebersicht() {
       <AusgleichKarte />
       <DieserMonat />
       <LetzteBelege />
+      <PreisKarte />
 
       <h2 className="text-[17px] font-bold px-1 -mb-2 mt-1">Eure Töpfe</h2>
       <div className="card p-5 grid gap-4">
@@ -217,7 +219,7 @@ const MODULE: [string, string, string, boolean][] = [
   ["M1", "Fundament", "Konten, Töpfe, Personen, Kategorien, Abgleich", true],
   ["M2", "Belege und Ausgleich", "Einkäufe erfassen, Topf pro Position, wer schuldet wem", true],
   ["M3", "Beleg-Scanner", "Foto oder PDF → Positionen, lernt eure Kürzel", true],
-  ["M4", "Produkte und Preise", "EAN-Scan im Laden, Preisvergleich, Shrinkflation", false],
+  ["M4", "Produkte und Preise", "EAN-Scan im Laden, Preisvergleich, Shrinkflation", true],
   ["M5", "Budget und Konten", "Safe-to-Spend, Fixkosten, Verträge, Sparziele, Daueraufträge", false],
   ["M6", "Rechnungen und Planung", "QR-Rechnungen, Garantien, Smart Basket", false],
   ["M7", "Übernahme", "Daten aus Haushaltskasse und Kasse unterwegs", false],
@@ -236,6 +238,37 @@ function Fahrplan() {
           </li>
         ))}
       </ol>
+    </div>
+  );
+}
+
+/** Preise: neue Preisalarme und der schnelle Weg zum Preis-Check im Laden */
+function PreisKarte() {
+  const { household } = useHaushalt();
+  // eine Abfrage: die drei neuesten Alarme und ihre Gesamtzahl
+  const alarme = useQuery<Alarm & { gesamt: number }>(`select x.*, (count(*) over ())::int as gesamt from (${ALARM_SQL} and seen_at is null) x
+     order by x.observed_on desc limit 3`, [household]);
+  if (!alarme) return null;
+  const n = alarme[0]?.gesamt ?? 0;
+  return (
+    <div className="card p-4 grid gap-3" data-testid="preis-karte">
+      <div className="flex items-center justify-between gap-3">
+        <a href="#/preise" className="grid no-underline text-ink">
+          <span className="eyebrow">Preise</span>
+          <b className="text-[16px]">{n ? `${n} ${n === 1 ? "neuer Preisalarm" : "neue Preisalarme"}` : "Keine neuen Preisalarme"}</b>
+        </a>
+        <a href="#/preis-pruefen" className="btn btn-soft no-underline !min-h-0 py-2 text-[var(--accent-ink)]"><Icon name="strichcode" size={18} />Preis prüfen</a>
+      </div>
+      {alarme.map((a) => {
+        const t = alarmText(a);
+        return (
+          <a key={a.id} href={`#/preise/${a.master_product_id}`} className="flex items-start gap-2.5 no-underline text-ink text-[13.5px]">
+            <Icon name={a.kind === "shrinkflation" ? "waage" : a.kind === "price_jump" ? "trend_hoch" : "trend_runter"} size={17}
+              className={`mt-0.5 ${a.kind === "price_drop" ? "text-accent-ink" : "text-crit"}`} />
+            <span className="grid min-w-0"><span className="font-semibold truncate">{t.titel}: {a.produkt}{a.laden ? ` · ${a.laden}` : ""}</span><span className="text-ink-2 truncate">{t.text}</span></span>
+          </a>
+        );
+      })}
     </div>
   );
 }

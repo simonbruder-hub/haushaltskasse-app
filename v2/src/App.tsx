@@ -8,6 +8,9 @@ import { Shell } from "./ui/Shell";
 import { ToastProvider } from "./ui/kit";
 import { Start } from "./pages/Start";
 import { Uebersicht } from "./pages/Uebersicht";
+import { Preise } from "./pages/Preise";
+import { Produkt } from "./pages/Produkt";
+import { PreisPruefen } from "./pages/PreisPruefen";
 import { Konten } from "./pages/Konten";
 import { KontoDetail } from "./pages/KontoDetail";
 import { Kategorien } from "./pages/Kategorien";
@@ -86,6 +89,8 @@ function MitHaushalt({ household, ich }: { household: string; ich: string | null
     case "ausgleich": inhalt = <Ausgleich />; break;
     case "mehr": inhalt = <Mehr />; break;
     case "scan": inhalt = <Scannen key={id ?? "datei"} kamera={id === "kamera"} />; break;
+    case "preise": inhalt = id ? <Produkt key={id} id={id} /> : <Preise />; break;
+    case "preis-pruefen": inhalt = <PreisPruefen key={id ?? "scan"} artikelId={id} />; break;
     default: inhalt = <Uebersicht />;
   }
   return (

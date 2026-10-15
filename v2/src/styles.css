@@ -184,6 +184,9 @@
   .sc-thumbs img:first-child { margin-left: 0; }
   .sc-tipp { text-align: center; font-size: 12px; color: rgba(255,255,255,.75); margin: 0; }
 
+  .ean-rahmen { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+  .ean-rahmen span { width: min(78vw, 360px); height: min(36vw, 170px); border-radius: 18px; border: 3px solid rgba(255,255,255,.9); box-shadow: 0 0 0 100vmax rgba(8, 14, 10, .45); }
+
   .zuschnitt { grid-template-rows: auto minmax(0, 1fr) auto; }
   .zs-oben { display: flex; justify-content: space-between; align-items: center; padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 8px; font-size: 16px; }
   .zs-buehne { position: relative; overflow: hidden; }

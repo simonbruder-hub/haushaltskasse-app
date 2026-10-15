@@ -115,3 +115,71 @@ test("Update M2 → aktuell: Belege und Saldo bleiben, Scanner geht", async ({ b
   await expect(page.getByLabel("Beleg aus Datei")).toHaveCount(1);
   await ctx.close();
 });
+
+// Update von der veröffentlichten M3-Version: Produkt und Kürzel aus einem KI-Scan bleiben; neue Scans legen Artikel mit Packung an
+const M3 = "2a7031a";
+test("Update M3 → aktuell: Produkte und Kürzel bleiben, Preise pro kg ab dem nächsten Scan", async ({ browser }) => {
+  test.skip((() => { try { execFileSync("git", ["cat-file", "-e", M3], { cwd: repo, stdio: "ignore" }); return false; } catch { return true; } })(), "M3 nicht im Verlauf");
+  const alt = mkdtempSync(join(tmpdir(), "haushalt-m3-"));
+  execFileSync("sh", ["-c", `git archive ${M3} neu | tar -x -C "${alt}"`], { cwd: repo });
+  wurzel = join(alt, "neu");
+  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 412, height: 839 }, isMobile: true, hasTouch: true, locale: "de-CH" });
+  const page = await ctx.newPage();
+  const fehler: string[] = [];
+  page.on("pageerror", (e) => fehler.push(e.message));
+  const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-expose-headers": "request-id" };
+  const beleg = (datum: string, preis: number) => ({
+    document: { document_type: "receipt", language: "de", legibility: "good", is_complete: true, warnings: [] },
+    merchant: { name: "Coop", chain_key: "coop", branch_name: null, street: null, postal_code: null, city: null, country: "CH", vat_number: null },
+    transaction: { date: datum, time: null, currency: "CHF", receipt_number: null, register_id: null, receipt_barcode_text: null, is_refund: false },
+    line_items: [{ position: 1, raw_text: `CAFE CREME BOHNEN 500G ${preis.toFixed(2)}`, item_type: "product", quantity: 1, quantity_unit: "piece", unit_price: null,
+      regular_price: preis, item_discount: 0, discount_label: null, final_price: preis, is_promo: false, pack_size_hint: { value: 500, unit: "g" },
+      multipack_count: null, vat_code: null, ean: null, confidence: "high", product_name: "Kaffeebohnen", category: "Lebensmittel" }],
+    basket_discounts: [], payments: [{ kind: "debit_card", label: "Karte", amount: preis, card_last4: null }],
+    loyalty: { program: "none", card_masked: null, points_earned: null, points_redeemed: null },
+    totals: { subtotal: preis, total: preis, rounding: 0, vat_lines: [] },
+  });
+  const antworten = [beleg("2026-09-02", 12.9), beleg("2026-10-02", 14.47)];
+  await page.route("https://api.anthropic.com/**", async (route) => {
+    if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
+    await route.fulfill({ status: 200, contentType: "application/json", headers: { ...cors, "request-id": "req_u" }, body: JSON.stringify({
+      id: "msg_u", type: "message", role: "assistant", model: "claude-opus-5-5", stop_reason: "end_turn", stop_sequence: null,
+      content: [{ type: "text", text: JSON.stringify(antworten.shift()) }], usage: { input_tokens: 3000, output_tokens: 900 } }) });
+  });
+  const url = `http://localhost:${PORT}/`;
+  const bild = readFileSync(fileURLToPath(new URL("./fixtures/beleg-kamera.mjpeg", import.meta.url)));
+  const scannen = async () => {
+    await page.getByRole("link", { name: "Erfassen", exact: true }).click();
+    await page.getByLabel("Beleg aus Datei").setInputFiles({ name: "kaffee.jpg", mimeType: "image/jpeg", buffer: bild });
+    await expect(page.getByRole("heading", { name: "Coop" })).toBeVisible({ timeout: 20_000 });
+  };
+
+  // M3: einrichten, KI-Schlüssel, Beleg scannen
+  await page.goto(url);
+  await page.getByText("Neuen Haushalt einrichten").click({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Haushalt einrichten" }).click();
+  await expect(page.getByRole("heading", { name: "Hallo Simon" })).toBeVisible({ timeout: 20_000 });
+  await page.goto(url + "#/einstellungen");
+  await page.getByLabel("API-Schlüssel").fill("sk-ant-api03-test0000000000000000000000");
+  await page.getByRole("button", { name: "Speichern" }).first().click();
+  await scannen();
+  await page.getByRole("button", { name: /^Bestätigen/ }).click();
+  await expect(page.getByRole("status")).toHaveText("Beleg gespeichert", { timeout: 15_000 });
+
+  // Aktueller Build: Datenbank v3 → v4
+  wurzel = aktuell;
+  await page.goto(url + "#/preise");
+  await page.reload();
+  await expect(page.getByRole("listitem", { name: "Kaffeebohnen" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("listitem", { name: "Kaffeebohnen" })).toContainText("kein Preis");   // M3 kannte die Packung noch nicht
+  // Zweiter Scan: Kürzel bekannt (Vorschlag), Packung 500 g, Preis pro kg
+  await scannen();
+  await expect(page.getByText("Vorschlag", { exact: true })).toBeVisible();
+  await expect(page.getByRole("listitem", { name: "Kaffeebohnen" })).toContainText("500 g");
+  await page.getByRole("button", { name: /^Bestätigen/ }).click();
+  await expect(page.getByRole("status")).toHaveText("Beleg gespeichert", { timeout: 15_000 });
+  await page.goto(url + "#/preise");
+  await expect(page.getByRole("listitem", { name: "Kaffeebohnen" })).toContainText("28.94 / kg");
+  expect(fehler.filter((f) => !/ErrnoError/.test(f))).toEqual([]);
+  await ctx.close();
+});

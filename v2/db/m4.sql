@@ -324,6 +324,12 @@ begin
   end loop;
 end $$;
 
+-- Neue Schwellen in den Einstellungen: alle Alarme des Haushalts neu
+create function alle_preisalarme_rechnen(p_household uuid) returns void language plpgsql as $$
+begin
+  perform preisalarme_rechnen(p_household, id) from master_product where household_id = p_household;
+end $$;
+
 -- Fällt eine Beobachtung weg (Beleg oder Regalpreis gelöscht, Preise neu erfasst): Alarme der Produkte neu aufbauen
 create function on_price_observation_delete() returns trigger language plpgsql as $$
 declare r record;
@@ -383,6 +389,7 @@ language sql stable as $$
     select distinct on (o.merchant_id, o.merchant_product_id) o.*
       from price_observation o
      where o.household_id = p_household and o.master_product_id = p_master and o.observed_on <= p_heute
+       and not exists (select 1 from merchant_product n where n.replaces_id = o.merchant_product_id and n.deleted_at is null)   -- alte Packung
      order by o.merchant_id, o.merchant_product_id, o.observed_on desc, o.created_at desc),
   x as (
     select l.*, (l.is_promo and l.observed_on > p_heute - s.aktion_tage) as aktion_gilt,
@@ -407,6 +414,7 @@ language sql stable as $$
   letzte as (
     select distinct on (o.master_product_id, o.merchant_id, o.merchant_product_id) o.*
       from price_observation o where o.household_id = p_household and o.observed_on <= p_heute
+       and not exists (select 1 from merchant_product n where n.replaces_id = o.merchant_product_id and n.deleted_at is null)   -- alte Packung
      order by o.master_product_id, o.merchant_id, o.merchant_product_id, o.observed_on desc, o.created_at desc),
   aktuell as (
     select l.master_product_id, l.merchant_id,
