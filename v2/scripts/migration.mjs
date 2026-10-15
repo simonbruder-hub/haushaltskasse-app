@@ -9,6 +9,7 @@ const kopf = `-- Haushalt · Supabase-Migration M1 (Fundament)
 const dateien = [
   ["20261014000000_m1_fundament.sql", "M1 (Fundament)", ["schema.sql", "stammdaten.sql", "server.sql"]],
   ["20261015000000_m2_belege.sql", "M2 (Belege und Ausgleich)", ["m2.sql", "server_m2.sql"]],
+  ["20261016000000_m3_scanner.sql", "M3 (Beleg-Scanner)", ["m3.sql", "server_m3.sql"]],
 ];
 for (const [name, titel, teile] of dateien) {
   const sql = [kopf.replace("M1 (Fundament)", titel).replace("db/schema.sql, db/stammdaten.sql und db/server.sql", teile.map((t) => "db/" + t).join(", ")), ...teile.map(lies)].join("\n\n");

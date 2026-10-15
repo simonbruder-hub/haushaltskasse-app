@@ -122,13 +122,13 @@ describe("Server noch ohne die neueste Migration", () => {
     await h.query(`insert into household_member (household_id, user_id, role, person_id) values ($1, $2, 'owner', $3)`, [hh, user, p]);
     const vorher = await zahl(h, `select count(*) n from _outbox`);
     const r = await new SyncEngine(h, new PGliteRemote(alt, user)).sync();
-    expect(r.error).toMatch(/SERVER_VERALTET: Server auf Stand 1, App auf Stand 2/);
+    expect(r.error).toMatch(/SERVER_VERALTET: Server auf Stand 1, App auf Stand 3/);
     expect(r.pushed).toBe(0);
     expect(await zahl(alt, `select count(*) n from household`)).toBe(0);
     expect(await zahl(h, `select count(*) n from _outbox`)).toBe(vorher);
   });
 
   test("Server auf aktuellem Stand meldet seine Version", async () => {
-    expect(await new PGliteRemote(await server(), randomUUID()).rpc<number>("app_schema_version", {})).toBe(2);
+    expect(await new PGliteRemote(await server(), randomUUID()).rpc<number>("app_schema_version", {})).toBe(3);
   });
 });

@@ -18,15 +18,16 @@ const anteile = async (db: Db, txn: string) => Object.fromEntries((await db.quer
     join person p on p.id = a.person_id where l.transaction_id = $1 group by 1`, [txn])).rows.map((r) => [r.n, Number(r.s)]));
 
 describe("M2: Belege und Ausgleich", () => {
-  test("Migration 1 → 2 behält bestehende Daten", async () => {
+  test("Migration von 1 auf den neuesten Stand behält bestehende Daten", async () => {
     const alt = new PGlite() as unknown as Db;
     await alt.transaction(async (tx) => { await tx.exec(MIGRATIONS[0].sql); await tx.query(`insert into _schema_version (version) values (1)`); });
     await alt.query(`select seed_household($1, 'Altstetten', 'Simon', 'Eliana')`, [H]);
     expect(await schemaVersion(alt)).toBe(1);
-    expect(await migrate(alt)).toBe(2);
+    expect(await migrate(alt)).toBe(MIGRATIONS[MIGRATIONS.length - 1].version);
     expect(Number((await alt.query<{ n: number }>(`select count(*)::int n from category where household_id = $1`, [H])).rows[0].n)).toBe(36);
     const trig = (await alt.query<{ n: number }>(`select count(*)::int n from pg_trigger where tgname = 't_outbox'`)).rows[0].n;
-    expect(Number(trig)).toBe(16);
+    const tabellen = (await alt.query<{ n: number }>(`select count(*)::int n from sync_tables()`)).rows[0].n;
+    expect(Number(trig)).toBe(Number(tabellen));   // jede abgeglichene Tabelle hat ihre Outbox
     d = alt;
     const id = async (sql: string, p: unknown[] = []) => (await d.query<{ id: string }>(sql, p)).rows[0].id;
     ids = {

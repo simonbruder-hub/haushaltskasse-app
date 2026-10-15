@@ -12,6 +12,7 @@
     "migration": "node scripts/migration.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.134.0",
     "@electric-sql/pglite": "^0.5.10",
     "@supabase/supabase-js": "^2.117.3",
     "react": "^19.1.1",

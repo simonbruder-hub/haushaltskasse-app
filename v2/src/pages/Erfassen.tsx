@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { db, useQuery } from "../db/client";
 import { geld, heute, kurzDatum, zahl } from "../lib/format";
-import { BELEG_ART, belegLaden, belegSpeichern, ladenAnlegen, type Beleg, type BelegArt } from "../lib/belege";
+import { BELEG_ART, belegLaden, belegSpeichern, ladenAnlegen, type Beleg, type BelegArt, type Position } from "../lib/belege";
 import { LADEN_FARBE, persoenlich, topfOptionen, vorschau, zahlKonten } from "../lib/auswahl";
 import { useHaushalt } from "../lib/haushalt";
 import { go } from "../lib/router";
@@ -9,7 +9,8 @@ import { KategorieWahl, TopfChips, useKategorien } from "../ui/Auswahl";
 import { Avatar, farbe, Feld, Seg, Seite, useAktion } from "../ui/kit";
 import { Icon } from "../ui/Icon";
 
-interface PosForm { text: string; betrag: string; rabatt: string; kategorie: string | null; topf: string | null }
+// Aus einem gescannten Beleg: Typ, Produkt, Kürzel und Menge laufen beim Bearbeiten unverändert mit
+interface PosForm { text: string; betrag: string; rabatt: string; kategorie: string | null; topf: string | null; mit?: Partial<Position> }
 interface Laden { id: string; name: string; chain_key: string; n: number }
 const ZAHLARTEN: [string, string][] = [["debit_card", "Karte"], ["twint", "Twint"], ["cash", "Bar"], ["bank_transfer", "Überweisung"], ["credit_card", "Kreditkarte"]];
 const GUTSCHEINE: [string, string][] = [["loyalty_points", "Punkte"], ["voucher", "Gutschein"], ["gift_card", "Geschenkkarte"], ["reka", "Reka"], ["lunch_check", "Lunch-Check"]];
@@ -60,7 +61,8 @@ export function Erfassen({ id }: { id?: string }) {
       setGutscheine(b.zahlungen.filter((z) => !z.konto).map((z) => ({ art: z.art, betrag: String(z.betrag) })));
       if (b.positionen.length) {
         setAufteilen(true); setDetails(true);
-        setPositionen(b.positionen.map((p) => ({ text: p.text, betrag: String(p.betrag), rabatt: p.rabatt ? String(p.rabatt) : "", kategorie: p.kategorie, topf: p.topf })));
+        setPositionen(b.positionen.map((p) => ({ text: p.text, betrag: String(p.betrag), rabatt: p.rabatt ? String(p.rabatt) : "", kategorie: p.kategorie, topf: p.topf,
+          mit: { typ: p.typ, produkt: p.produkt, kuerzel: p.kuerzel, menge: p.menge, einheit: p.einheit, einzelpreis: p.einzelpreis } })));
       }
       if (b.waehrung && b.waehrung !== "CHF") setDetails(true);
     })();
@@ -122,7 +124,7 @@ export function Erfassen({ id }: { id?: string }) {
       const b: Beleg = {
         id, household, art, datum, laden: ladenFrei && !ladenText.trim() ? null : ladenId, bezeichnung: notiz.trim() || ladenName || katObj?.name || null,
         total, waehrung, kurs: k, topf: topf!, kaeufer: zahlerPerson ?? erwachsene[0].id, kategorie,
-        positionen: aufteilen ? positionen.map((p) => ({ text: p.text, betrag: zahl(p.betrag), rabatt: zahl(p.rabatt) || undefined, kategorie: p.kategorie ?? kategorie, topf: p.topf })) : [],
+        positionen: aufteilen ? positionen.map((p) => ({ ...p.mit, text: p.text, betrag: zahl(p.betrag), rabatt: zahl(p.rabatt) || undefined, kategorie: p.kategorie ?? kategorie, topf: p.topf })) : [],
         zahlungen: [
           ...gutscheine.map((g) => ({ art: g.art, betrag: zahl(g.betrag), konto: null, label: GUTSCHEINE.find(([v]) => v === g.art)?.[1] ?? null })),
           { art: zahlart, betrag: Math.round((total - gutscheinSumme) * 100) / 100, konto: kontoAktiv, zahlungsmittel },

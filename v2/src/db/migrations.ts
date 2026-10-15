@@ -3,12 +3,15 @@ import stammdaten from "../../db/stammdaten.sql?raw";
 import client from "../../db/client.sql?raw";
 import m2 from "../../db/m2.sql?raw";
 import clientM2 from "../../db/client_m2.sql?raw";
+import m3 from "../../db/m3.sql?raw";
+import clientM3 from "../../db/client_m3.sql?raw";
 import type { Db } from "./types";
 
 /** Datenbank im Browser. Jede Version läuft genau einmal, in einer Transaktion. */
 export const MIGRATIONS: { version: number; name: string; sql: string }[] = [
   { version: 1, name: "M1 Fundament", sql: [schema, stammdaten, client].join("\n") },
   { version: 2, name: "M2 Belege und Ausgleich", sql: [m2, clientM2].join("\n") },
+  { version: 3, name: "M3 Beleg-Scanner", sql: [m3, clientM3].join("\n") },
 ];
 
 export async function schemaVersion(db: Db): Promise<number> {

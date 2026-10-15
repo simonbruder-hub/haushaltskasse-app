@@ -24,6 +24,8 @@ export async function server(opt: { nurM1?: boolean } = {}): Promise<Db> {
   if (!opt.nurM1) {
     await db.exec(lies("m2.sql"));
     await db.exec(lies("server_m2.sql"));
+    await db.exec(lies("m3.sql"));
+    await db.exec(lies("server_m3.sql"));
   }
   await db.exec(`grant all on all tables in schema public to authenticated;
     grant all on all sequences in schema public to authenticated;`);
