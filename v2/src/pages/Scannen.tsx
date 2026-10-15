@@ -9,46 +9,56 @@ import { entwurfBauen, entwurfSpeichern, topfFuer, zeilenSumme, type ScanEntwurf
 import { kiEinstellung, scanDateiNehmen } from "../scan/einstellung";
 import { KiFehler, kiLesen, MODELLE, type Teil } from "../scan/ki";
 import { ocrLesen } from "../scan/ocr";
+import { Kamera } from "../scan/dokument/Kamera";
+import { zusammensetzen } from "../scan/dokument/seite";
 import { KategorieWahl, TopfChips, useKategorien } from "../ui/Auswahl";
 import { Avatar, farbe, Feld, Seg, Seite, Sheet, useAktion } from "../ui/kit";
 import { Icon } from "../ui/Icon";
 import { ZAHLART_TEXT } from "./BelegDetail";
 import type { Abweichung } from "../scan/pruefen";
 
-type Phase = { art: "waehlen" } | { art: "lesen"; text: string; anteil: number | null } | { art: "fehler"; text: string; offlineMoeglich: boolean } | { art: "pruefen" };
+type Phase = { art: "waehlen" } | { art: "kamera" } | { art: "lesen"; text: string; anteil: number | null } | { art: "fehler"; text: string; offlineMoeglich: boolean } | { art: "pruefen" };
 
 const STATUS: Record<ScanZeile["status"], [string, string]> = {
   sicher: ["var(--accent)", "gelernt"], bekannt: ["var(--gold)", "Vorschlag"], ki: ["var(--k-zweck)", "KI"], neu: ["var(--rule-strong)", "neu"], pruefen: ["var(--crit)", "prüfen"],
 };
 
-export function Scannen() {
+/** Was gelesen wird: eine gewählte Datei (Foto oder PDF) oder die Seiten aus dem Dokumentscanner (von oben nach unten) */
+type Quelle = { datei: File } | { seiten: Blob[] };
+
+export function Scannen({ kamera: mitKamera = false }: { kamera?: boolean }) {
   const { household, konten, personen, ich } = useHaushalt();
   const kats = useKategorien();
   const aktion = useAktion();
   const ki = kiEinstellung();
-  const [phase, setPhase] = useState<Phase>({ art: "waehlen" });
+  const [phase, setPhase] = useState<Phase>(mitKamera ? { art: "kamera" } : { art: "waehlen" });
   const [entwurf, setEntwurf] = useState<ScanEntwurf | null>(null);
   const [vorschauBild, setVorschauBild] = useState<string | null>(null);
   const [konto, setKonto] = useState<string | null>(null);
   const [bearbeiten, setBearbeiten] = useState<number | null>(null);
   const [gross, setGross] = useState(false);
   const [busy, setBusy] = useState(false);
-  const letzteDatei = useRef<File | null>(null);
+  const letzte = useRef<Quelle | null>(null);
   const kamera = useRef<HTMLInputElement>(null), datei = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { const f = scanDateiNehmen(); if (f) lesen(f); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const f = scanDateiNehmen(); if (f) lesen({ datei: f }); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { if (vorschauBild) URL.revokeObjectURL(vorschauBild); }, [vorschauBild]);
 
   const eigenesKonto = zahlKonten(konten).find((k) => k.kind === "privat" && k.owners.length === 1 && k.owners[0].person_id === ich)?.id ?? zahlKonten(konten)[0]?.id ?? null;
 
-  async function lesen(f: File, erzwingeOffline = false) {
-    letzteDatei.current = f;
-    const pdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+  async function lesen(q: Quelle, erzwingeOffline = false) {
+    letzte.current = q;
+    const f = "datei" in q ? q.datei : null;
+    const pdf = !!f && (f.type === "application/pdf" || /\.pdf$/i.test(f.name));
     setEntwurf(null);
     setPhase({ art: "lesen", text: "Bild wird vorbereitet …", anteil: null });
     try {
-      const sha = await sha256(f);
-      const vorb = pdf ? null : await bildVorbereiten(f);
+      // Mehrere Seiten: jede einzeln an die Erkennung, für die Ablage untereinander zu einem Bild
+      const seiten = "seiten" in q ? await Promise.all(q.seiten.map((b) => bildVorbereiten(b))) : null;
+      const vorb = pdf ? null : seiten
+        ? { ablage: seiten.length === 1 ? seiten[0].ablage : await zusammensetzen(seiten.map((x) => x.ablage)), abschnitte: seiten.flatMap((x) => x.abschnitte) }
+        : await bildVorbereiten(f!);
+      const sha = await sha256(pdf ? f! : vorb!.ablage);
       if (vorb) setVorschauBild(URL.createObjectURL(vorb.ablage));
       const d = await db();
       // direkt aus der Datenbank: beim Öffnen der Seite sind die Kategorien im Hook evtl. noch nicht geladen
@@ -58,7 +68,7 @@ export function Scannen() {
       const kiMoeglich = ki && navigator.onLine && !erzwingeOffline;
       if (kiMoeglich) {
         try {
-          const teile: Teil[] = pdf ? [{ art: "pdf", daten: await zuBase64(f) }] : await Promise.all(vorb!.abschnitte.map(async (b) => ({ art: "bild" as const, daten: await zuBase64(b) })));
+          const teile: Teil[] = pdf ? [{ art: "pdf", daten: await zuBase64(f!) }] : await Promise.all(vorb!.abschnitte.map(async (b) => ({ art: "bild" as const, daten: await zuBase64(b) })));
           const r = await kiLesen({ teile, kategorien: katNamen, heute: heute(), schluessel: ki.schluessel, modell: ki.modell, status: (t) => setPhase({ art: "lesen", text: t, anteil: null }) });
           extraktion = r.extraktion; abweichungen = r.abweichungen;
           protokoll = { modell: r.modell, requestId: r.requestId, tokensIn: r.tokensIn, tokensOut: r.tokensOut, roh: r.roh, parsed: r.extraktion };
@@ -71,11 +81,11 @@ export function Scannen() {
         if (pdf) throw new KiFehler("PDF-Belege liest nur die KI-Erkennung. Bitte in den Einstellungen einrichten oder ein Foto aufnehmen.");
         quelle = "ocr";
         setPhase({ art: "lesen", text: "Texterkennung auf dem Handy …", anteil: 0 });
-        extraktion = await ocrLesen(vorb!.ablage, (a) => setPhase({ art: "lesen", text: "Texterkennung auf dem Handy …", anteil: a }));
+        extraktion = await ocrLesen(seiten ? seiten.map((x) => x.ablage) : [vorb!.ablage], (a) => setPhase({ art: "lesen", text: "Texterkennung auf dem Handy …", anteil: a }));
       }
       const e = await entwurfBauen(d, {
         household, extraktion, quelle, kanal: pdf ? "receipt_pdf" : "receipt_image", abweichungen, heute: heute(),
-        datei: { blob: pdf ? f : vorb!.ablage, sha, mime: pdf ? "application/pdf" : "image/jpeg" }, protokoll,
+        datei: { blob: pdf ? f! : vorb!.ablage, sha, mime: pdf ? "application/pdf" : "image/jpeg" }, protokoll,
       });
       if (quelle === "ocr" && ki && !erzwingeOffline) e.hinweise.unshift("Ohne Internet gelesen (Texterkennung auf dem Handy). Bitte Positionen prüfen.");
       setEntwurf(e);
@@ -87,7 +97,7 @@ export function Scannen() {
     }
   }
 
-  const waehlen = (ev: React.ChangeEvent<HTMLInputElement>) => { const f = ev.target.files?.[0]; ev.target.value = ""; if (f) lesen(f); };
+  const waehlen = (ev: React.ChangeEvent<HTMLInputElement>) => { const f = ev.target.files?.[0]; ev.target.value = ""; if (f) lesen({ datei: f }); };
   const eingaben = (
     <>
       <input ref={kamera} type="file" accept="image/*" capture="environment" className="hidden" aria-label="Foto aufnehmen" onChange={waehlen} />
@@ -95,12 +105,22 @@ export function Scannen() {
     </>
   );
 
+  if (phase.art === "kamera") {
+    return (
+      <Seite eyebrow="Beleg scannen" titel="Kamera">
+        {eingaben}
+        <Kamera onAbbrechen={() => (mitKamera ? go("erfassen") : setPhase({ art: "waehlen" }))}
+          onOhneKamera={() => kamera.current?.click()}
+          onFertig={(seiten) => { lesen({ seiten: seiten.map((x) => x.blob) }); seiten.forEach((x) => URL.revokeObjectURL(x.url)); }} />
+      </Seite>
+    );
+  }
   if (phase.art === "waehlen") {
     return (
       <Seite eyebrow="Beleg scannen" titel="Foto oder PDF" zurueck="erfassen">
         {eingaben}
         <div className="grid gap-3">
-          <button className="btn btn-primary btn-big" onClick={() => kamera.current?.click()}><Icon name="kamera" />Beleg fotografieren</button>
+          <button className="btn btn-primary btn-big" onClick={() => setPhase({ art: "kamera" })}><Icon name="kamera" />Beleg fotografieren</button>
           <button className="btn btn-big" onClick={() => datei.current?.click()}><Icon name="blatt" />Foto oder PDF wählen</button>
         </div>
         <KiHinweis />
@@ -126,8 +146,8 @@ export function Scannen() {
         {eingaben}
         <div className="card-flat p-4 grid gap-2 border-[var(--crit)]"><p className="text-crit font-semibold">{phase.text}</p></div>
         <div className="grid gap-2">
-          <button className="btn btn-primary" onClick={() => letzteDatei.current && lesen(letzteDatei.current)}><Icon name="aktualisieren" />Nochmals versuchen</button>
-          {phase.offlineMoeglich && <button className="btn" onClick={() => letzteDatei.current && lesen(letzteDatei.current, true)}><Icon name="wolke_aus" />Ohne KI auf dem Handy lesen</button>}
+          <button className="btn btn-primary" onClick={() => letzte.current && lesen(letzte.current)}><Icon name="aktualisieren" />Nochmals versuchen</button>
+          {phase.offlineMoeglich && <button className="btn" onClick={() => letzte.current && lesen(letzte.current, true)}><Icon name="wolke_aus" />Ohne KI auf dem Handy lesen</button>}
           <button className="btn" onClick={() => datei.current?.click()}><Icon name="blatt" />Anderes Foto wählen</button>
           <button className="btn btn-ghost" onClick={() => go("erfassen")}>Von Hand erfassen</button>
         </div>

@@ -34,9 +34,10 @@ export function ocrLaden(): Promise<void> {
 
 const KETTEN: Record<string, string> = { Migros: "migros", Coop: "coop", Denner: "denner", Lidl: "lidl", Aldi: "aldi" };
 
-export async function ocrLesen(bild: Blob, fortschritt?: (anteil: number) => void): Promise<Extraktion> {
+/** Mehrere Bilder = Teile eines langen Belegs von oben nach unten; doppelte Zeilen an den Übergängen entfernt bon.js */
+export async function ocrLesen(bilder: Blob[], fortschritt?: (anteil: number) => void): Promise<Extraktion> {
   await ocrLaden();
-  const r = await window.Bon!.auslesen([bild], fortschritt);
+  const r = await window.Bon!.auslesen(bilder, fortschritt);
   const r2 = (x: number) => Math.round(x * 100) / 100;
   return {
     document: { document_type: "receipt", language: "de", legibility: "partial", is_complete: true, warnings: [] },

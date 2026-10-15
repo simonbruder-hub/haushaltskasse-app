@@ -85,7 +85,7 @@ function MitHaushalt({ household, ich }: { household: string; ich: string | null
     case "belege": inhalt = id ? <BelegDetail id={id} /> : <Belege />; break;
     case "ausgleich": inhalt = <Ausgleich />; break;
     case "mehr": inhalt = <Mehr />; break;
-    case "scan": inhalt = <Scannen />; break;
+    case "scan": inhalt = <Scannen key={id ?? "datei"} kamera={id === "kamera"} />; break;
     default: inhalt = <Uebersicht />;
   }
   return (

@@ -26,12 +26,14 @@ test.beforeAll(async () => {
 });
 test.afterAll(() => { server?.close(); });
 
+// Ohne Handy-Emulation zeichnen: Mit «isMobile» baut Chromium die Seite 980 px breit auf und verkleinert sie,
+// dann hängt die Schriftgrösse im Bild von der Chromium-Version ab.
 async function belegBild(page: Page, zeilen: string[]): Promise<Buffer> {
-  const p = await page.context().newPage();
-  await p.setViewportSize({ width: 560, height: 120 + zeilen.length * 44 });
+  const ctx = await page.context().browser()!.newContext({ viewport: { width: 560, height: 120 + zeilen.length * 44 }, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+  const p = await ctx.newPage();
   await p.setContent(`<body style="margin:0;background:#fff"><pre style="font:600 30px/44px 'DejaVu Sans Mono',monospace;margin:30px;color:#111">${zeilen.join("\n")}</pre></body>`);
   const b = await p.screenshot({ type: "png" });
-  await p.close();
+  await ctx.close();
   return b;
 }
 

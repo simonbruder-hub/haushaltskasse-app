@@ -40,6 +40,18 @@ const PFADE: Record<string, string> = {
   kalender: "M4 6h16v14H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4",
   kamera: "M4 8h3l1.6-2.5h6.8L17 8h3v11H4z" + kreis(12, 13.2, 3.6),
   geschenk: "M4 11h16v9H4zM3 7.5h18V11H3zM12 7.5V20M12 7.5c-1.5-3-5-3.6-5-1.5 0 1.2 2 1.5 5 1.5zM12 7.5c1.5-3 5-3.6 5-1.5 0 1.2-2 1.5-5 1.5z",
+  bild: "M5.5 4h13A2.5 2.5 0 0 1 21 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5v-11A2.5 2.5 0 0 1 5.5 4zM21 16l-5-5-10 9" + kreis(9, 10, 2),
+  licht: "M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1v.5h5V16c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z",
+  blitzauto: "M13 3 6 13.5h5L10 21l7-10.5h-5z",
+  drehen: "M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7",
+  zauber: "m4 20 11-11M14 4l1 2.5L17.5 7 15 8l-1 2.5L13 8l-2.5-1L13 6zM19 13l.6 1.4L21 15l-1.4.6L19 17l-.6-1.4L17 15l1.4-.6z",
+  rahmen: "M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM4 9h16M9 4v16",
+  zuschneiden: "M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14",
+  strichcode: "M4 5v14M7 5v14M10.5 5v14M13 5v14M16.5 5v14M20 5v14",
+  preis: "M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3-8.7 8.7zM8 8h.01M10.5 14.5l4-4",
+  alarm: "M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9zM10 20a2.2 2.2 0 0 0 4 0",
+  trend_hoch: "M3 17l6-6 4 4 8-8M15 7h6v6",
+  trend_runter: "M3 7l6 6 4-4 8 8M15 17h6v-6",
 };
 
 export type IconName = keyof typeof PFADE;

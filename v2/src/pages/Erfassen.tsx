@@ -143,8 +143,7 @@ export function Erfassen({ id }: { id?: string }) {
     <Seite eyebrow={id ? "Beleg bearbeiten" : "Erfassen"} titel={BELEG_ART[art]} zurueck={id ? `belege/${id}` : undefined}>
       {!id && (
         <div className="grid grid-cols-2 gap-2">
-          <label className="btn btn-soft cursor-pointer"><Icon name="kamera" />Fotografieren
-            <input type="file" accept="image/*" capture="environment" className="hidden" aria-label="Beleg fotografieren" onChange={scanWahl} /></label>
+          <a href="#/scan/kamera" className="btn btn-soft no-underline text-[var(--accent-ink)]"><Icon name="kamera" />Fotografieren</a>
           <label className="btn cursor-pointer"><Icon name="blatt" />Foto / PDF
             <input type="file" accept="image/*,application/pdf" className="hidden" aria-label="Beleg aus Datei" onChange={scanWahl} /></label>
         </div>
