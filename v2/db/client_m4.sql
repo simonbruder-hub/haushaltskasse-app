@@ -50,4 +50,6 @@ begin
     from master_product m
    where m.id = o.master_product_id
      and m.id in (select x::uuid from jsonb_array_elements_text(coalesce(p_changed -> 'master_product', '[]')) x);
+  perform preisalarme_rechnen(m.household_id, m.id) from master_product m
+    where m.id in (select x::uuid from jsonb_array_elements_text(coalesce(p_changed -> 'master_product', '[]')) x);
 end $$;

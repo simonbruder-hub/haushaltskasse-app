@@ -109,6 +109,14 @@ describe("Artikel pro Laden, Packung und Preisalarme (Blueprint §2.7)", () => {
     expect(al).toEqual({ kind: "price_jump", change_pct: "12.17", old_normalized: "25.8000", new_normalized: "28.9400" });
   });
 
+  test("Neu rechnen in beliebiger Reihenfolge (wie nach einem Abgleich): derselbe Alarm", async () => {
+    const txs = (await d.query<{ t: string }>(`select distinct l.transaction_id t, h.booking_date from line_item l join transaction_header h on h.id = l.transaction_id
+       join master_product p on p.id = l.master_product_id where p.name = 'Kaffeebohnen' order by h.booking_date desc`)).rows.map((r) => r.t);
+    for (const t of txs) await d.query(`select record_price_observations($1)`, [t]);   // neuere zuerst
+    const al = (await d.query<{ kind: string; change_pct: string }>(`select kind::text, change_pct::text from v_price_alert where household_id = $1 and produkt = 'Kaffeebohnen'`, [H])).rows;
+    expect(al).toEqual([{ kind: "price_jump", change_pct: "12.17" }]);
+  });
+
   test("«Gelesen» übersteht das Neurechnen der Preise", async () => {
     const a = await eins<{ kind: string; source_id: string }>(`select kind::text, source_id from v_price_alert where household_id = $1 and produkt = 'Kaffeebohnen'`, [H]);
     await d.query(`select alarm_gelesen($1, $2, $3)`, [H, a.kind, a.source_id]);

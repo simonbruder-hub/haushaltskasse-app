@@ -90,6 +90,7 @@ begin
   update master_product set comparison_unit = p_unit, density_g_per_ml = p_density
    where id = p_master and (comparison_unit, density_g_per_ml) is distinct from (p_unit, p_density);
   update price_observation set comparison_unit = p_unit where master_product_id = p_master;
+  perform preisalarme_rechnen(household_id, id) from master_product where id = p_master;
 end $$;
 
 -- Zwei Produkte zusammenführen («Milch» → «Vollmilch»): Artikel, Kürzel, Positionen und Preise wandern mit
@@ -108,6 +109,7 @@ begin
   update price_observation set master_product_id = p_nach, comparison_unit = v_unit where household_id = p_household and master_product_id = p_von;
   update price_alert set master_product_id = p_nach where household_id = p_household and master_product_id = p_von;
   update master_product set merged_into = p_nach, deleted_at = now() where id = p_von;
+  perform preisalarme_rechnen(p_household, p_nach);
 end $$;
 
 -- «1L», «280G», «6X1.5L», «10STK» aus einem Belegschlüssel entfernen: gleiches Produkt in anderer Packung erkennen
@@ -224,6 +226,7 @@ begin
          base_quantity(1, 'piece', a.unit_size, a.unit_type, a.pack_count), base_dimension('piece', a.unit_size, a.unit_type), m.comparison_unit
     from shelf_price s join merchant_product a on a.id = s.merchant_product_id join master_product m on m.id = a.master_product_id
    where s.id = p_id;
+  perform preisalarme_rechnen(o.household_id, o.master_product_id) from price_observation o where o.shelf_price_id = p_id;
 end $$;
 create function on_shelf_price() returns trigger language plpgsql as $$
 begin
@@ -261,6 +264,108 @@ create function alarm_gelesen(p_household uuid, p_kind alert_kind, p_source uuid
   values (stabile_id('alarm', p_household::text, p_kind::text, p_source::text), p_household, p_kind, p_source)
   on conflict (id) do nothing
 $$;
+
+-- ---------------------------------------------------------------------
+-- 5b. Preisalarme unabhängig von der Reihenfolge
+--    Bisher entstand ein Alarm beim Einfügen einer Beobachtung (Trigger). Nach einem Abgleich rechnet das Handy
+--    die Preise der geänderten Belege aber in beliebiger Reihenfolge neu – dann fehlte z. B. ein Preissprung.
+--    Neu: Alarme pro Produkt in fester Reihenfolge (Datum, dann Quelle – uuid7, also zeitlich) neu aufbauen.
+-- ---------------------------------------------------------------------
+drop trigger price_observation_alerts on price_observation;
+
+create function preisalarme_rechnen(p_household uuid, p_master uuid) returns void language plpgsql as $$
+declare s household_setting; x price_observation; prev price_observation; v_pct numeric;
+begin
+  delete from price_alert where household_id = p_household and master_product_id = p_master;
+  select * into s from household_setting where household_id = p_household;
+  if not found then s.price_jump_threshold_pct := 10; s.shrinkflation_min_size_drop_pct := 2; s.shrinkflation_price_tolerance_pct := 2; end if;
+  for x in
+    select * from price_observation
+     where household_id = p_household and master_product_id = p_master
+       and merchant_product_id is not null and regular_known and normalized_regular_base is not null
+     order by observed_on, coalesce(line_item_id, shelf_price_id, id)
+  loop
+    -- Shrinkflation: gleicher Artikel oder sein Vorgänger, Packung kleiner, Packungspreis ~ gleich oder höher
+    select o.* into prev from price_observation o
+     where o.household_id = p_household and o.regular_known and o.id <> x.id
+       and (o.observed_on, coalesce(o.line_item_id, o.shelf_price_id, o.id)) < (x.observed_on, coalesce(x.line_item_id, x.shelf_price_id, x.id))
+       and (o.merchant_product_id = x.merchant_product_id
+            or o.merchant_product_id = (select replaces_id from merchant_product where id = x.merchant_product_id))
+       and o.unit_base_quantity is not null and o.base_dimension = x.base_dimension
+     order by o.observed_on desc, coalesce(o.line_item_id, o.shelf_price_id, o.id) desc limit 1;
+    if found and x.unit_base_quantity < prev.unit_base_quantity * (1 - s.shrinkflation_min_size_drop_pct / 100)
+             and x.unit_regular_price * x.fx_rate >= prev.unit_regular_price * prev.fx_rate * (1 - s.shrinkflation_price_tolerance_pct / 100) then
+      v_pct := round(((x.unit_regular_price * x.fx_rate / x.unit_base_quantity)
+                    / (prev.unit_regular_price * prev.fx_rate / prev.unit_base_quantity) - 1) * 100, 2);
+      insert into price_alert (household_id, kind, merchant_id, merchant_product_id, master_product_id, previous_observation_id, observation_id,
+                               old_base_quantity, new_base_quantity, old_unit_price, new_unit_price, old_normalized, new_normalized, change_pct)
+      values (p_household, 'shrinkflation', x.merchant_id, x.merchant_product_id, p_master, prev.id, x.id,
+              prev.unit_base_quantity, x.unit_base_quantity, prev.unit_regular_price, x.unit_regular_price,
+              prev.normalized_regular_base, x.normalized_regular_base, v_pct);
+      continue;
+    end if;
+    -- Preissprung: gleicher Händler, gleicher Artikel, letzter bekannter Normalpreis
+    select o.* into prev from price_observation o
+     where o.merchant_product_id = x.merchant_product_id and o.merchant_id = x.merchant_id and o.regular_known and o.id <> x.id
+       and (o.observed_on, coalesce(o.line_item_id, o.shelf_price_id, o.id)) < (x.observed_on, coalesce(x.line_item_id, x.shelf_price_id, x.id))
+     order by o.observed_on desc, coalesce(o.line_item_id, o.shelf_price_id, o.id) desc limit 1;
+    if found and prev.unit_regular_price > 0 and prev.unit_base_quantity > 0 and x.unit_base_quantity > 0 then
+      v_pct := round(((x.unit_regular_price * x.fx_rate / x.unit_base_quantity)
+                    / (prev.unit_regular_price * prev.fx_rate / prev.unit_base_quantity) - 1) * 100, 2);
+      if abs(v_pct) >= s.price_jump_threshold_pct then
+        insert into price_alert (household_id, kind, merchant_id, merchant_product_id, master_product_id, previous_observation_id, observation_id,
+                                 old_base_quantity, new_base_quantity, old_unit_price, new_unit_price, old_normalized, new_normalized, change_pct)
+        values (p_household, case when v_pct > 0 then 'price_jump'::alert_kind else 'price_drop'::alert_kind end,
+                x.merchant_id, x.merchant_product_id, p_master, prev.id, x.id,
+                prev.unit_base_quantity, x.unit_base_quantity, prev.unit_regular_price, x.unit_regular_price,
+                prev.normalized_regular_base, x.normalized_regular_base, v_pct);
+      end if;
+    end if;
+  end loop;
+end $$;
+
+-- Fällt eine Beobachtung weg (Beleg oder Regalpreis gelöscht, Preise neu erfasst): Alarme der Produkte neu aufbauen
+create function on_price_observation_delete() returns trigger language plpgsql as $$
+declare r record;
+begin
+  for r in select distinct household_id, master_product_id from alt loop
+    perform preisalarme_rechnen(r.household_id, r.master_product_id);
+  end loop;
+  return null;
+end $$;
+create trigger t_preis_weg after delete on price_observation referencing old table as alt
+  for each statement execute function on_price_observation_delete();
+
+-- Preise eines Belegs neu erfassen (wie M1), danach die Alarme der betroffenen Produkte neu aufbauen
+create or replace function record_price_observations(p_txn uuid) returns void language plpgsql as $$
+declare v_hh uuid; v_masters uuid[]; v_m uuid;
+begin
+  select household_id into v_hh from transaction_header where id = p_txn;
+  select array_agg(distinct master_product_id) into v_masters from price_observation
+   where line_item_id in (select id from line_item where transaction_id = p_txn);
+  delete from price_observation where line_item_id in (select id from line_item where transaction_id = p_txn);
+  insert into price_observation (household_id, merchant_id, branch_id, merchant_product_id, master_product_id, line_item_id,
+                                 observed_on, source, currency, fx_rate, unit_regular_price, unit_paid_price, is_promo, regular_known,
+                                 unit_base_quantity, base_dimension, comparison_unit)
+  select h.household_id, h.merchant_id, h.branch_id, l.merchant_product_id, l.master_product_id, l.id,
+         h.booking_date, case when h.source_channel = 'loyalty_csv' then 'loyalty_import'::price_source else 'receipt'::price_source end,
+         h.currency, h.fx_rate,
+         coalesce(l.regular_unit_price, round(l.regular_price / l.quantity, 4)),
+         case when l.item_discount = 0 then coalesce(l.regular_unit_price, round(l.regular_price / l.quantity, 4))
+              else round(l.final_price / l.quantity, 4) end,
+         l.is_promo or l.item_discount > 0, l.item_discount > 0 or not l.is_promo,
+         l.base_quantity / l.quantity, l.base_dimension, m.comparison_unit
+    from line_item l
+    join transaction_header h on h.id = l.transaction_id
+    join master_product m on m.id = l.master_product_id
+   where l.transaction_id = p_txn and l.item_type = 'product' and l.deleted_at is null and h.merchant_id is not null
+     and h.status = 'confirmed' and h.deleted_at is null
+   order by l.position;
+  for v_m in select distinct x from unnest(coalesce(v_masters, '{}') || array(
+               select master_product_id from line_item where transaction_id = p_txn and master_product_id is not null)) x loop
+    perform preisalarme_rechnen(v_hh, v_m);
+  end loop;
+end $$;
 
 -- ---------------------------------------------------------------------
 -- 6. Preisvergleich

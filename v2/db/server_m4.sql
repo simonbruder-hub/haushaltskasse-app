@@ -41,6 +41,19 @@ begin
   return null;
 end $$;
 
+create or replace function on_price_observation_delete() returns trigger language plpgsql as $$
+declare r record;
+begin
+  begin
+    for r in select distinct household_id, master_product_id from alt loop
+      perform preisalarme_rechnen(r.household_id, r.master_product_id);
+    end loop;
+  exception when others then
+    raise notice 'Nachberechnung übersprungen: %', sqlerrm;
+  end;
+  return null;
+end $$;
+
 -- Stand der Server-Datenbank (siehe server_m2.sql)
 create or replace function app_schema_version() returns int language sql stable as $$ select 4 $$;
 grant execute on function app_schema_version() to authenticated;
