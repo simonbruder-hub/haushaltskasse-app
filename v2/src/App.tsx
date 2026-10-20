@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { sichern, useLiveQuery, useQuery } from "./db/client";
+import { sichern, useLiveQuery, useQuery, db } from "./db/client";
 import { KONTEN_SQL, type Konto, type Person } from "./lib/data";
 import { HaushaltCtx } from "./lib/haushalt";
 import { useRoute } from "./lib/router";
@@ -11,6 +11,9 @@ import { Uebersicht } from "./pages/Uebersicht";
 import { Preise } from "./pages/Preise";
 import { Produkt } from "./pages/Produkt";
 import { PreisPruefen } from "./pages/PreisPruefen";
+import { Budget } from "./pages/Budget";
+import { faelligesBuchen } from "./lib/budget";
+import { heute } from "./lib/format";
 import { Konten } from "./pages/Konten";
 import { KontoDetail } from "./pages/KontoDetail";
 import { Kategorien } from "./pages/Kategorien";
@@ -75,6 +78,7 @@ function MitHaushalt({ household, ich }: { household: string; ich: string | null
   const personen = useQuery<Person>(`select id, display_name, role, birth_date::text, sort, color, archived_at::text from person where household_id = $1 order by sort`, [household]);
   const konten = useQuery<Konto>(KONTEN_SQL, [household]);
   const route = useRoute();
+  useFaelligesBuchen(household);
   if (!hh || !personen || !konten) return <Laden />;
   if (!hh.length) return <Warten />;
   const [seite, id] = route;
@@ -90,6 +94,7 @@ function MitHaushalt({ household, ich }: { household: string; ich: string | null
     case "mehr": inhalt = <Mehr />; break;
     case "scan": inhalt = <Scannen key={id ?? "datei"} kamera={id === "kamera"} />; break;
     case "preise": inhalt = id ? <Produkt key={id} id={id} /> : <Preise />; break;
+    case "budget": inhalt = <Budget reiter={id} />; break;
     case "preis-pruefen": inhalt = <PreisPruefen key={id ?? "scan"} artikelId={id} />; break;
     default: inhalt = <Uebersicht />;
   }
@@ -134,4 +139,22 @@ function SyncAgent() {
     return () => clearTimeout(t);
   }, [n]);
   return null;
+}
+
+/** Daueraufträge und Sparraten, die fällig sind, bucht jedes Handy selbst: beim Start und wenn die App nach Mitternacht wieder sichtbar wird.
+ *  Die IDs ergeben sich aus Auftrag und Monat, beide Handys buchen also dieselben Zeilen (siehe db/m5.sql). */
+function useFaelligesBuchen(household: string) {
+  useEffect(() => {
+    let letzter = "";
+    const buchen = async () => {
+      const tag = heute();
+      if (tag === letzter) return;
+      letzter = tag;
+      try { await faelligesBuchen(await db(), tag); } catch (e) { letzter = ""; console.warn("Fälliges buchen übersprungen", e); }
+    };
+    buchen();
+    const sichtbar = () => { if (document.visibilityState === "visible") buchen(); };
+    document.addEventListener("visibilitychange", sichtbar);
+    return () => document.removeEventListener("visibilitychange", sichtbar);
+  }, [household]);
 }

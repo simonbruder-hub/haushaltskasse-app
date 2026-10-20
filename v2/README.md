@@ -1,4 +1,4 @@
-# Haushalt – neue App (Module 1 bis 4)
+# Haushalt – neue App (Module 1 bis 5)
 
 Läuft unter **https://simonbruder-hub.github.io/haushaltskasse-app/neu/** – parallel zur bisherigen App «Kasse unterwegs».
 Quellcode in diesem Ordner, der fertige Build liegt in `../neu/`.
@@ -68,6 +68,17 @@ Quellcode in diesem Ordner, der fertige Build liegt in `../neu/`.
   - Auf der Übersicht und unter «Produkte und Preise»; «Gelesen» gilt auf beiden Handys.
 - **Produkt:** Preise pro Laden, Verlauf (Beleg oder Regal), Artikel mit EAN und Packung, Verbrauch («zuletzt vor 12 Tagen, Zyklus 16 Tage» ab drei Käufen). Name, Kategorie, Vergleichseinheit und Dichte ändern; zwei Produkte **zusammenführen**.
 
+## Was M5 kann
+
+Alles unter **Mehr → Budget und Planung** (Reiter):
+- **Budgets:** pro Person (zählt die Hälfte vom Gemeinsamen und alles Eigene) oder pro Topf, für alles, einen Lebensbereich oder eine Kategorie. Mit Übertrag (nichts, Überschuss, Überschuss und Defizit) und **Safe-to-Spend**: «Heute noch» CHF x, Tagesbetrag, Tempo (auf Kurs, knapp, über Budget). Kategorien mit Sparziel belasten das Sparziel statt das Budget.
+- **Fixkosten:** Betrag und Rhythmus, Monatsäquivalent, Anteil je Person, nächste Fälligkeit. «Als bezahlt buchen» macht daraus einen Beleg (Rechnung) und rückt die Fälligkeit weiter.
+- **Verträge:** Verlängerung, Laufzeit, Kündigungsfrist (auch «bis Monatsende»); Status Läuft · Bald kündigen · Letzte Chance · Frist verpasst; «Ich habe gekündigt».
+- **Sparziele:** Konto, auf dem das Geld liegt, Topf und Kategorie, Ziel, Datum, Monatsrate; Stand, nötige Rate, Auf Kurs; Einzahlungen und Korrekturen von Hand.
+- **Daueraufträge** (Lohn → Topf, Sparen): buchen sich selbst, sobald sie fällig sind, auf beiden Handys nur einmal; frühere Monate werden nachgebucht (höchstens 36). Dazu einmalige Überweisungen.
+- **50/30/20** pro Person und Monat: Bedarf, Wünsche, Gespart (Überweisungen auf eigene Sparkonten), nicht verplant, gegen das Einkommen.
+- **Übersicht:** Karte «Das darfst du heute noch ausgeben» und Kündigungsfristen.
+
 ## Architektur
 
 ```
@@ -116,7 +127,7 @@ Browser (Handy)                              Supabase (eigenes Projekt)
 ## Supabase einrichten (einmalig, ca. 10 Minuten)
 
 1. Auf [supabase.com](https://supabase.com) ein Konto anlegen und ein **neues Projekt** erstellen. Den kostenlosen Plan wählen, als Region eine möglichst nahe (z. B. Zürich oder Frankfurt). Das Datenbank-Passwort gut aufbewahren.
-2. **SQL Editor** → «New query» → den Inhalt von `supabase/migrations/20261014000000_m1_fundament.sql` einfügen → **Run**. Danach genauso `…_m2_belege.sql`, `…_m3_scanner.sql` und `…_m4_produkte.sql`, in dieser Reihenfolge.
+2. **SQL Editor** → «New query» → den Inhalt von `supabase/migrations/20261014000000_m1_fundament.sql` einfügen → **Run**. Danach genauso `…_m2_belege.sql`, `…_m3_scanner.sql`, `…_m4_produkte.sql` und `…_m5_budget.sql`, in dieser Reihenfolge.
    - Wer schon eingerichtet hat, führt nur die noch fehlenden Dateien aus. Fehlt eine, sagt die App beim Abgleich, welche.
 3. **Authentication → Email Templates:**
    - In den Vorlagen **«Confirm signup»** und **«Magic Link»** den Code einfügen, z. B. `<p>Dein Code: <b>{{ .Token }}</b></p>`.
@@ -144,4 +155,4 @@ Mit lokalem PostgreSQL und PostgREST (`POSTGREST_BIN=/pfad/postgrest`) laufen zu
 - `db/tests/supabase.test.ts`: die echte Migration, RLS und der Abgleich über PostgREST und supabase-js
 - `tests/abgleich.spec.ts`: zwei Handys im Browser gegen diesen Nachbau (inklusive Beleg, Ausgleich und Korrektur)
 
-Weitere Browser-Tests: `m3.spec.ts` (Scanner mit simulierter Claude-API und echter Offline-Erkennung), `kamera.spec.ts` (Dokumentscanner mit künstlicher Kamera), `m4.spec.ts` (Strichcode mit künstlicher Kamera, simuliertes OpenFoodFacts, Regalpreis, Alarm), `pages.spec.ts` (Aufbau wie GitHub Pages, Texterkennung offline), `update.spec.ts` (Update von M1, M2 und M3 mit vorhandenen Daten).
+Weitere Browser-Tests: `m3.spec.ts` (Scanner mit simulierter Claude-API und echter Offline-Erkennung), `kamera.spec.ts` (Dokumentscanner mit künstlicher Kamera), `m4.spec.ts` (Strichcode mit künstlicher Kamera, simuliertes OpenFoodFacts, Regalpreis, Alarm), `m5.spec.ts` (Budget, Fixkost, Dauerauftrag, Übersicht), `pages.spec.ts` (Aufbau wie GitHub Pages, Texterkennung offline), `update.spec.ts` (Update von M1, M2 und M3 mit vorhandenen Daten).

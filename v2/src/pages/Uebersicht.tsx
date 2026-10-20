@@ -3,7 +3,7 @@ import { KONTO_ART, type Konto } from "../lib/data";
 import { ichBin } from "../lib/sync";
 import { gruppieren } from "../lib/gruppen";
 import { useHaushalt } from "../lib/haushalt";
-import { geld, heute, monatName, monatsGrenzen } from "../lib/format";
+import { geld, heute, kurzDatum, monatName, monatsGrenzen } from "../lib/format";
 import { topfOptionen } from "../lib/auswahl";
 import { useBelege } from "../lib/belegliste";
 import { Avatar, farbe, KontoIcon } from "../ui/kit";
@@ -11,6 +11,8 @@ import { Icon } from "../ui/Icon";
 import { BelegEintrag } from "./Belege";
 import { SALDO_SQL, schuld } from "./Ausgleich";
 import { ALARM_SQL, alarmText, type Alarm } from "../lib/preise";
+import { TEMPO } from "../budget/bausteine";
+import { FRIST } from "../budget/Fixkosten";
 
 export function Uebersicht() {
   const { ich, personen, konten } = useHaushalt();
@@ -29,6 +31,7 @@ export function Uebersicht() {
 
       <AusgleichKarte />
       <DieserMonat />
+      <PlanungKarte />
       <LetzteBelege />
       <PreisKarte />
 
@@ -220,7 +223,7 @@ const MODULE: [string, string, string, boolean][] = [
   ["M2", "Belege und Ausgleich", "Einkäufe erfassen, Topf pro Position, wer schuldet wem", true],
   ["M3", "Beleg-Scanner", "Foto oder PDF → Positionen, lernt eure Kürzel", true],
   ["M4", "Produkte und Preise", "EAN-Scan im Laden, Preisvergleich, Shrinkflation", true],
-  ["M5", "Budget und Konten", "Safe-to-Spend, Fixkosten, Verträge, Sparziele, Daueraufträge", false],
+  ["M5", "Budget und Konten", "Safe-to-Spend, Fixkosten, Verträge, Sparziele, Daueraufträge", true],
   ["M6", "Rechnungen und Planung", "QR-Rechnungen, Garantien, Smart Basket", false],
   ["M7", "Übernahme", "Daten aus Haushaltskasse und Kasse unterwegs", false],
 ];
@@ -269,6 +272,40 @@ function PreisKarte() {
           </a>
         );
       })}
+    </div>
+  );
+}
+
+/** Budget heute und Kündigungsfristen: nur sichtbar, wenn es etwas zu sagen gibt (eine Abfrage) */
+function PlanungKarte() {
+  const { household, ich } = useHaushalt();
+  const z = useQuery<{ typ: "budget" | "vertrag"; titel: string; wert: string | null; status: string; datum: string | null; tage: number | null }>(
+    `select 'budget' as typ, b.name as titel, s.left_today::text as wert, s.pace as status, null::text as datum, null::int as tage
+       from budget_status($1, $2) s join variable_budget b on b.id = s.budget_id where b.scope = 'person' and b.person_id = $3
+     union all
+     select 'vertrag', d.name, null, d.status, d.cancellation_deadline::text, d.days_left from vertrags_fristen($1, $2) d where d.status in ('remind', 'last_chance', 'missed')
+      order by 1, 4`, [household, heute(), ich]);
+  if (!z?.length) return null;
+  const budgets = z.filter((x) => x.typ === "budget"), vertraege = z.filter((x) => x.typ === "vertrag");
+  return (
+    <div className="card p-4 grid gap-3" data-testid="planung-karte">
+      <div className="flex items-center justify-between gap-3">
+        <a href="#/budget" className="grid no-underline text-ink"><span className="eyebrow">Budget</span><b className="text-[16px]">{budgets.length ? "Das darfst du heute noch ausgeben" : "Fristen im Blick"}</b></a>
+        <a href="#/budget" className="icon-btn" aria-label="Budget öffnen"><Icon name="rechts" /></a>
+      </div>
+      {budgets.map((b) => (
+        <a key={b.titel} href="#/budget" className="flex items-center justify-between gap-3 no-underline text-ink">
+          <span className="grid min-w-0"><span className="font-semibold truncate">{b.titel}</span><span className={`chip ${TEMPO[b.status]?.[2] ?? ""} w-fit`}>{TEMPO[b.status]?.[0]}</span></span>
+          <span className={`num text-[20px] ${Number(b.wert) < 0 ? "text-crit" : ""}`}>{geld(b.wert)}</span>
+        </a>
+      ))}
+      {vertraege.map((v) => (
+        <a key={v.titel} href="#/budget/fixkosten" className="flex items-center justify-between gap-3 no-underline text-ink text-[14px]">
+          <span className="grid min-w-0"><span className="font-semibold truncate">{v.titel}</span>
+            <span className="text-muted text-[12.5px]">{v.status === "missed" ? "Kündigungsfrist verpasst" : `kündigen bis ${v.datum ? kurzDatum(v.datum) : ""}`}</span></span>
+          <span className={`chip ${FRIST[v.status]?.[1] ?? ""}`}>{FRIST[v.status]?.[0]}</span>
+        </a>
+      ))}
     </div>
   );
 }

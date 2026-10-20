@@ -7,6 +7,8 @@ import m3 from "../../db/m3.sql?raw";
 import clientM3 from "../../db/client_m3.sql?raw";
 import m4 from "../../db/m4.sql?raw";
 import clientM4 from "../../db/client_m4.sql?raw";
+import m5 from "../../db/m5.sql?raw";
+import clientM5 from "../../db/client_m5.sql?raw";
 import type { Db } from "./types";
 
 /** Datenbank im Browser. Jede Version läuft genau einmal, in einer Transaktion. */
@@ -15,6 +17,7 @@ export const MIGRATIONS: { version: number; name: string; sql: string }[] = [
   { version: 2, name: "M2 Belege und Ausgleich", sql: [m2, clientM2].join("\n") },
   { version: 3, name: "M3 Beleg-Scanner", sql: [m3, clientM3].join("\n") },
   { version: 4, name: "M4 Produkte und Preise", sql: [m4, clientM4].join("\n") },
+  { version: 5, name: "M5 Budget und Konten", sql: [m5, clientM5].join("\n") },
 ];
 
 export async function schemaVersion(db: Db): Promise<number> {

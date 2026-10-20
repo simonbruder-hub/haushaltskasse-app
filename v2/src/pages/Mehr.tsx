@@ -14,6 +14,7 @@ export function Mehr() {
   const preise = useQuery<{ n: number; alarme: number }>(`select (select count(*) from master_product where household_id = $1 and deleted_at is null)::int as n,
       (select count(*) from v_price_alert where household_id = $1 and seen_at is null)::int as alarme`, [household])?.[0];
   const eintraege: [string, string, string, string][] = [
+    ["budget", "zweck", "Budget und Planung", "Budgets, Fixkosten, Verträge, Sparziele, Daueraufträge, 50/30/20"],
     ["preise", "preis", "Produkte und Preise", preise ? `${preise.n} ${preise.n === 1 ? "Produkt" : "Produkte"}${preise.alarme ? ` · ${preise.alarme} ${preise.alarme === 1 ? "Preisalarm" : "Preisalarme"}` : ""} · Preis prüfen` : ""],
     ["konten", "konten", "Konten und Töpfe", `${echte} ${echte === 1 ? "echtes Konto" : "echte Konten"} · ${toepfe} ${toepfe === 1 ? "Topf" : "Töpfe"} vorbereitet`],
     ["kategorien", "kategorien", "Kategorien", kat ? `${kat.n} Kategorien in ${kat.b} Lebensbereichen` : ""],

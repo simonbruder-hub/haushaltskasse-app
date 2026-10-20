@@ -11,6 +11,7 @@ const dateien = [
   ["20261015000000_m2_belege.sql", "M2 (Belege und Ausgleich)", ["m2.sql", "server_m2.sql"]],
   ["20261016000000_m3_scanner.sql", "M3 (Beleg-Scanner)", ["m3.sql", "server_m3.sql"]],
   ["20261017000000_m4_produkte.sql", "M4 (Produkte und Preise)", ["m4.sql", "server_m4.sql"]],
+  ["20261018000000_m5_budget.sql", "M5 (Budget und Konten)", ["m5.sql", "server_m5.sql"]],
 ];
 for (const [name, titel, teile] of dateien) {
   const sql = [kopf.replace("M1 (Fundament)", titel).replace("db/schema.sql, db/stammdaten.sql und db/server.sql", teile.map((t) => "db/" + t).join(", ")), ...teile.map(lies)].join("\n\n");

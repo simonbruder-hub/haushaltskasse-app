@@ -15,6 +15,8 @@ Zuerst lesen: `v2/docs/UEBERGABE.md` (Stand, Befehle, Stolpersteine, offene Punk
 
 - **Sprache:** Mit Simon auf Deutsch in Schweizer Schreibweise («ss» statt «ß»). Beträge in CHF.
 - **Ablauf pro Modul:** zuerst den Plan zeigen, auf ein kurzes OK warten, dann umsetzen.
+- **Tokens sparen:** Simon will eine laufende App, alles andere ist Zusatz. Kurz antworten, keine Agenten oder Workflows ohne Bedarf, Tests nur am Modulende. M6 und M7 sind optional und nur auf Wunsch.
+- **Stand:** M1–M5 fertig und veröffentlicht. Wo es weitergeht, steht in `v2/docs/UEBERGABE.md` §6.
 - **Branches:** auf einem Branch arbeiten (`wip-mN`). Wenn alles grün ist, `main` per Fast-Forward nachziehen und pushen. Das ist die Veröffentlichung.
 - **Deploy prüfen:** über GitHub Actions, Workflow «pages build and deployment».
 - **Vor jedem Push in `v2/`:**

@@ -123,14 +123,14 @@ describe("Server noch ohne die neueste Migration", () => {
     await h.query(`insert into household_member (household_id, user_id, role, person_id) values ($1, $2, 'owner', $3)`, [hh, user, p]);
     const vorher = await zahl(h, `select count(*) n from _outbox`);
     const r = await new SyncEngine(h, new PGliteRemote(alt, user)).sync();
-    expect(r.error).toMatch(/SERVER_VERALTET: Server auf Stand 1, App auf Stand 4/);
-    expect(abgleichFehler(r.error)).toMatch(/20261015000000_m2_belege\.sql, 20261016000000_m3_scanner\.sql und 20261017000000_m4_produkte\.sql/);
+    expect(r.error).toMatch(/SERVER_VERALTET: Server auf Stand 1, App auf Stand 5/);
+    expect(abgleichFehler(r.error)).toMatch(/20261015000000_m2_belege\.sql, 20261016000000_m3_scanner\.sql, 20261017000000_m4_produkte\.sql und 20261018000000_m5_budget\.sql/);
     expect(r.pushed).toBe(0);
     expect(await zahl(alt, `select count(*) n from household`)).toBe(0);
     expect(await zahl(h, `select count(*) n from _outbox`)).toBe(vorher);
   });
 
   test("Server auf aktuellem Stand meldet seine Version", async () => {
-    expect(await new PGliteRemote(await server(), randomUUID()).rpc<number>("app_schema_version", {})).toBe(4);
+    expect(await new PGliteRemote(await server(), randomUUID()).rpc<number>("app_schema_version", {})).toBe(5);
   });
 });

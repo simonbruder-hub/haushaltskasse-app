@@ -1,6 +1,6 @@
 /** Supabase-Migration pro Datenbank-Stand (scripts/migration.mjs) */
 const SERVER_MIGRATIONEN: Record<number, string> = {
-  2: "20261015000000_m2_belege.sql", 3: "20261016000000_m3_scanner.sql", 4: "20261017000000_m4_produkte.sql",
+  2: "20261015000000_m2_belege.sql", 3: "20261016000000_m3_scanner.sql", 4: "20261017000000_m4_produkte.sql", 5: "20261018000000_m5_budget.sql",
 };
 
 /** Meldungen des Servers verständlich machen. Typischer Fall nach einem App-Update: die Datenbank auf Supabase
