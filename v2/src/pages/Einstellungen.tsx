@@ -3,7 +3,7 @@ import { db, openDb, useQuery } from "../db/client";
 import { datum, monatName } from "../lib/format";
 import { sicherung } from "../lib/data";
 import { useHaushalt } from "../lib/haushalt";
-import { verbindung, verbindungSpeichern } from "../lib/supabase";
+import { eigeneVerbindung, standardVerbindung, verbindung, verbindungSpeichern } from "../lib/supabase";
 import { abgleichNeu, abmelden, einladen, haushaltVerbinden, ichBin, syncPruefen, useSync } from "../lib/sync";
 import { Abschnitt, Avatar, farbe, Feld, Seite, Sheet, useAktion, useToast } from "../ui/kit";
 import { kiEinstellung, kiSpeichern } from "../scan/einstellung";
@@ -50,7 +50,7 @@ function Abgleich({ household }: { household: string }) {
   const [code, setCode] = useState<string | null>(null);
   const v = verbindung();
   return (
-    <Abschnitt titel="Abgleich zwischen euren Handys" text="Über euer eigenes Supabase-Projekt (kostenlos). Ohne Abgleich bleibt alles nur auf diesem Handy.">
+    <Abschnitt titel="Abgleich zwischen euren Handys" text={standardVerbindung() ? "Über das gemeinsame Konto der Apps (auch Taktwerk). Ohne Anmeldung bleibt alles nur auf diesem Handy." : "Über euer eigenes Supabase-Projekt (kostenlos). Ohne Abgleich bleibt alles nur auf diesem Handy."}>
       <div className="card p-5 grid gap-4">
         {s.modus === "lokal" && (
           <>
@@ -89,7 +89,11 @@ function Abgleich({ household }: { household: string }) {
       <Sheet offen={verbindungZeigen} onClose={() => setVerbindungZeigen(false)} titel="Verbindung">
         <div className="grid gap-4">
           <VerbindungFormular fertig={() => setVerbindungZeigen(false)} />
-          <button className="btn btn-danger" onClick={async () => { await abmelden().catch(() => undefined); verbindungSpeichern(null); await syncPruefen(); setVerbindungZeigen(false); }}>Verbindung entfernen</button>
+          {eigeneVerbindung() && (
+            <button className="btn btn-danger" onClick={async () => { await abmelden().catch(() => undefined); verbindungSpeichern(null); await syncPruefen(); setVerbindungZeigen(false); }}>
+              {standardVerbindung() ? "Zurück zum gemeinsamen Konto" : "Verbindung entfernen"}
+            </button>
+          )}
         </div>
       </Sheet>
       <Sheet offen={!!code} onClose={() => setCode(null)} titel="Partner einladen">

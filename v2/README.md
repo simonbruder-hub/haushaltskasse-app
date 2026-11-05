@@ -15,8 +15,9 @@ Quellcode in diesem Ordner, der fertige Build liegt in `../neu/`.
 - **Offline zuerst:**
   - Die ganze Datenbank läuft im Browser (PGlite = PostgreSQL in WebAssembly, gespeichert in IndexedDB).
   - Die App startet ohne Netz (Service Worker).
-- **Abgleich zwischen zwei Handys** über ein eigenes Supabase-Projekt:
-  - Anmeldung per E-Mail-Code
+- **Abgleich zwischen zwei Handys** über das gemeinsame Supabase-Projekt der Apps (mit Taktwerk, Einrichtung im Repo `apps`, `konten/README.md`):
+  - auf der Website automatisch verbunden; eine selbst eingetragene Verbindung hat Vorrang
+  - Anmeldung per E-Mail-Code, im selben Browser gemeinsam mit Taktwerk
   - Einladungscode für den Partner
   - Row Level Security pro Haushalt
 

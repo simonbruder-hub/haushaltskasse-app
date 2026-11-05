@@ -9,7 +9,7 @@ Dieses Dokument ist für einen neuen Chat gedacht. Es beschreibt den Stand der n
 - **Bewusst nicht gebaut:** M6 (QR-Rechnungen, Garantien, Einkaufsliste) und M7 (Übernahme alter Daten). Simon will zuerst eine laufende App; beides ist optional (siehe §6). Nur auf Wunsch angehen.
 - **Nutzung:** Zurzeit nur Simon, auf seinem Handy. Eliana ist als Person angelegt; er erfasst auch Belege, die sie bezahlt hat. Alles ist für zwei Handys und später ein gemeinsames Konto vorbereitet.
 - **Offen bei Simon:**
-  - Ob Supabase eingerichtet ist, wissen wir nicht. Falls ja, müssen die Migrationen bis `…_m5_budget.sql` ausgeführt sein. Die App meldet es und nennt die fehlenden Dateien.
+  - Supabase (Entscheid 05.11.2026): gemeinsames Projekt mit Taktwerk, eine Anmeldung für beide Apps. Auf der Website verbindet sich die App von selbst damit (`src/lib/supabase.ts`, `GEMEINSAM`); lokal und in den Tests bleibt sie ohne Verbindung. Einrichtung (nur eure Adressen, Migrationen bis `…_m5_budget.sql`) im Repo `apps`, `konten/README.md`. Das bisherige Haushalt-Projekt hatte keine echten Daten und wird danach gelöscht.
   - Ob er einen Anthropic-API-Schlüssel für die KI-Erkennung eingetragen hat, wissen wir auch nicht.
 - **Alte App «Kasse unterwegs»:** liegt im Wurzelordner des Repositorys und bleibt in Gebrauch. Die neue App lädt von dort `ocr/` (Tesseract) und `bon.js` für die Offline-Texterkennung.
 
@@ -99,7 +99,7 @@ Der Build in `neu/` wird mit eingecheckt.
 **Simons Haltung:** Er braucht eine laufende App, alles andere ist Zusatz. Wenig Tokens verbrauchen, keine Workflows oder Agenten ohne Bedarf, kurz antworten. Vor jedem Modul den Plan zeigen und auf OK warten (CLAUDE.md).
 
 **Zuerst, braucht Simon (kein Code):**
-- **Supabase:** Falls eingerichtet, die Migrationen bis `…_m5_budget.sql` im SQL-Editor ausführen. Die App nennt sonst die fehlenden Dateien und speichert bis dahin nur auf dem Handy.
+- **Supabase:** das gemeinsame Projekt nach `konten/README.md` im Repo `apps` einrichten (Zugang, Migrationen bis `…_m5_budget.sql`), dann auf dem Handy anmelden: der Haushalt wird hochgeladen. Bis dahin nennt die App die fehlenden Dateien und speichert nur auf dem Handy.
 - **Auf dem Handy ausprobieren** (bisher nur im Browser mit künstlicher Kamera getestet): Kamera-Scanner, EAN-Scan, erster echter KI-Scan (Kosten stehen im Beleg), OpenFoodFacts live (CORS und Namen), Budget-Seiten.
 - **Cumulus-/Supercard-Export:** Für einen CSV-Import (Blueprint §3.1) braucht es einen echten Export von Simon.
 
